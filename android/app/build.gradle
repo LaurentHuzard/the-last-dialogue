@@ -6,6 +6,12 @@ android {
     namespace 'tv.octomue.thelastdialogue'
     compileSdk 35
 
+    // aapt's default <dir>_* ignore rule silently drops Next.js /_next assets.
+    // Keep the usual junk-file exclusions without excluding underscore directories.
+    androidResources {
+        ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+    }
+
     defaultConfig {
         applicationId 'tv.octomue.thelastdialogue'
         minSdk 24
