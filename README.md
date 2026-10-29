@@ -50,3 +50,7 @@ python -m compileall -q .
 The prototype includes rules-engine unit tests and FastAPI route smoke tests. Next.js lint/build, deployment tests and UI playtesting still need to be run in a fully provisioned environment.
 
 See [design scope and next steps](docs/vision-v1.md).
+
+## Android APK (prototype)
+
+Pull requests now build a debug APK using `.github/workflows/android-apk.yml`. Download the `the-last-dialogue-android-debug` artifact from the linked GitHub Actions run, or follow its link in the PR discussion. The bundled scripted mode runs **entirely on-device** without a backend; selecting LLM on this build transparently falls back to scripted mode. See [Android build and limitations](android/README.md).

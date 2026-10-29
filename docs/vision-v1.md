@@ -54,3 +54,7 @@ The player can submit a document/publication (with a URL) or a personal observat
 `cd backend && python -m unittest discover -s tests -v`
 
 Start the API with `uvicorn server:app --host 0.0.0.0 --port 8080`, start Next.js in `frontend` with `npm run dev`, then play both modes. Test LLM mode with a server-side key only and verify the network error fallback. The browser must never see an API key.
+
+## Android prototype
+
+The debug Android variant packages the Next.js static export in a WebView with a local, deterministic TypeScript rules engine. The same user-facing scripted scenario and vote rules are mirrored from the backend. Standalone APKs do not bundle OpenAI keys or a Python server: requesting the LLM mode falls back with an explicit warning. A future production LLM Android variant requires a securely configured remote backend and authentication. Static offline archives persist only in private WebView localStorage, and real-world sources open in the system browser. See [Android README](../android/README.md).

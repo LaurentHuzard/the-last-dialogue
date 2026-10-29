@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { clearOfflineSession, offlineRequest, resumeOfflineSession } from '../lib/offline-game';
 
 type Mode = 'scripted' | 'llm';
 type Proposal = 'sanctuary' | 'compromise' | 'construction';
@@ -28,7 +29,8 @@ type Session = {
   warning: string | null;
 };
 
-const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, '');
+const ANDROID_BUILD = process.env.NEXT_PUBLIC_ANDROID_BUILD === '1';
+const API = (process.env.NEXT_PUBLIC_API_URL || (ANDROID_BUILD ? '' : 'http://localhost:8080')).replace(/\/$/, '');
 const PROPOSALS: { id: Proposal; title: string; description: string }[] = [
   { id: 'sanctuary', title: 'Sanctuaire', description: 'Suspendre le chantier et protéger la forêt.' },
   { id: 'compromise', title: 'Corridor alternatif', description: 'Négocier un autre tracé et des garanties écologiques.' },
@@ -41,6 +43,9 @@ const DELEGATES = [
 ];
 
 async function request<T>(url: string, data?: unknown): Promise<T> {
+  if (ANDROID_BUILD && !API) {
+    return offlineRequest(url, data, window.localStorage) as T;
+  }
   const res = await fetch(`${API}${url}`, {
     method: data === undefined ? 'GET' : 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -63,6 +68,13 @@ export default function Home() {
   const [proposal, setProposal] = useState<Proposal>('compromise');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (ANDROID_BUILD && !API) {
+      const saved = resumeOfflineSession(window.localStorage);
+      if (saved) queueMicrotask(() => setSession(saved as Session));
+    }
+  }, []);
 
   async function act(action: () => Promise<Session>) {
     if (pending) return;
@@ -94,11 +106,11 @@ export default function Home() {
               <span className="mode-mark">◌</span><strong>Sans LLM</strong><small>Partie scénarisée, sans clé API et sans génération de contenu.</small>
             </button>
             <button type="button" className={`mode-card ${mode === 'llm' ? 'selected' : ''}`} onClick={() => setMode('llm')} aria-pressed={mode === 'llm'}>
-              <span className="mode-mark">✳</span><strong>Agents LLM</strong><small>Sélène propose une mission ; Ada et Ivo réagissent aux archives et négociations. Requiert une clé OpenAI côté serveur.</small>
+              <span className="mode-mark">✳</span><strong>Agents LLM</strong><small>{ANDROID_BUILD && !API ? 'Mode disponible avec un serveur distant configuré. Cette APK fonctionne en mode scénarisé autonome.' : 'Sélène propose une mission ; Ada et Ivo réagissent aux archives et négociations. Requiert une clé OpenAI côté serveur.'}</small>
             </button>
           </div>
           <button className="primary-action" disabled={pending} onClick={() => act(() => request<Session>('/api/sessions', { mode }))}>{pending ? 'Ouverture de la séance…' : 'Entrer dans l’Assemblée →'}</button>
-          <p className="footnote">Prototype local : sessions temporaires, aucune information envoyée à un service externe en mode sans LLM.</p>
+          <p className="footnote">{ANDROID_BUILD && !API ? 'Application Android autonome : jouable sans réseau, sans LLM. Les archives sont conservées sur cet appareil jusqu’à la suppression des données de l’app. Les recherches externes ouvrent ton navigateur.' : 'Prototype local : sessions temporaires, aucune information envoyée à un service externe en mode sans LLM.'}</p>
         </section>
       ) : (
         <div className="game-layout">
@@ -127,23 +139,23 @@ export default function Home() {
             {session.phase !== 'finished' && <div className="panel action-panel">
               <div className="panel-header"><span className="eyebrow">MISSION PROPOSÉE PAR SÉLÈNE</span><span className="tag">2026</span></div>
               <h3>{session.mission.title}</h3><p>{session.mission.request}</p>
-              <div className="source-links"><a href="https://openalex.org/" target="_blank" rel="noopener noreferrer">Explorer OpenAlex ↗</a><a href="https://inpn.mnhn.fr/" target="_blank" rel="noopener noreferrer">Explorer l&apos;INPN ↗</a></div>
+              <div className="source-links"><a href="https://openalex.org/" target={ANDROID_BUILD ? '_self' : '_blank'} rel="noopener noreferrer">Explorer OpenAlex ↗</a><a href="https://inpn.mnhn.fr/" target={ANDROID_BUILD ? '_self' : '_blank'} rel="noopener noreferrer">Explorer l&apos;INPN ↗</a></div>
               <form onSubmit={(event) => { event.preventDefault(); void act(() => request<Session>(`/api/sessions/${session.id}/archives`, { kind, title, description, source_url: sourceUrl || null })).then(() => { setTitle(''); setDescription(''); setSourceUrl(''); }); }}>
                 <div className="field-row"><label><span>Nature de l&apos;archive</span><select value={kind} onChange={event => setKind(event.target.value as 'publication' | 'observation')}><option value="publication">Publication / document</option><option value="observation">Observation personnelle</option></select></label><label><span>Intitulé</span><input required maxLength={120} minLength={5} value={title} onChange={event => setTitle(event.target.value)} placeholder="Titre de la découverte" /></label></div>
                 <label><span>Source web {kind === 'publication' ? '(requise)' : '(facultative)'}</span><input required={kind === 'publication'} type="url" value={sourceUrl} onChange={event => setSourceUrl(event.target.value)} placeholder="https://…" /></label>
                 <label><span>Ce que tu as réellement trouvé ou observé</span><textarea required minLength={25} maxLength={1500} rows={3} value={description} onChange={event => setDescription(event.target.value)} placeholder="Décris l'observation ou résume les résultats. Une source déclarée n'est pas une preuve validée." /></label>
                 <button className="secondary-action" disabled={pending || session.archives.length >= 12} type="submit">{pending ? 'Transmission…' : 'Ajouter aux archives →'}</button>
-                <p className="footnote">Ne partage pas de localisation précise, de données personnelles ou de photos privées. Les données restent dans la session côté serveur (temporairement).</p>
+                <p className="footnote">Ne partage pas de localisation précise, de données personnelles ou de photos privées. {ANDROID_BUILD && !API ? 'Les archives restent dans le stockage privé de cette application.' : 'Les données restent dans la session côté serveur (temporairement).'}</p>
               </form>
             </div>}
 
-            <div className="panel archives-panel"><div className="panel-header"><span className="eyebrow">ARCHIVES DU PRÉSENT</span><span className="tag">{session.archives.length} / 12</span></div>{session.archives.length === 0 ? <p className="muted">Aucun document versé. Une archive commence par une question.</p> : session.archives.map(a => <article className="archive" key={a.id}><div><span className="eyebrow">{a.kind === 'publication' ? 'PUBLICATION' : 'OBSERVATION'} / PROVENANCE NON VÉRIFIÉE</span><strong>{a.title}</strong><p>{a.description}</p>{a.source_url && <a href={a.source_url} target="_blank" rel="noopener noreferrer">Consulter la source déclarée ↗</a>}</div></article>)}</div>
+            <div className="panel archives-panel"><div className="panel-header"><span className="eyebrow">ARCHIVES DU PRÉSENT</span><span className="tag">{session.archives.length} / 12</span></div>{session.archives.length === 0 ? <p className="muted">Aucun document versé. Une archive commence par une question.</p> : session.archives.map(a => <article className="archive" key={a.id}><div><span className="eyebrow">{a.kind === 'publication' ? 'PUBLICATION' : 'OBSERVATION'} / PROVENANCE NON VÉRIFIÉE</span><strong>{a.title}</strong><p>{a.description}</p>{a.source_url && <a href={a.source_url} target={ANDROID_BUILD ? '_self' : '_blank'} rel="noopener noreferrer">Consulter la source déclarée ↗</a>}</div></article>)}</div>
           </section>
 
           <aside className="side-column">
             <div className="panel delegates-panel"><span className="eyebrow">LE CONSEIL</span><div className="delegate-list">{DELEGATES.map(d => <div className="delegate" key={d.id}><span className="avatar">{d.symbol}</span><div><strong>{d.name}</strong><small>{d.role}</small></div><span className="position">{(session.positions[d.id] || 0) > 0 ? '+' : ''}{session.positions[d.id] || 0}</span></div>)}</div><p className="footnote">Position indicative dans ce conflit, pas un jugement moral.</p></div>
             <div className="panel decision-panel"><span className="eyebrow">ORDRE DU JOUR · VOTE FINAL</span><h3>Le corridor énergétique</h3><p>Dépose tes preuves, échange des concessions et soumets une proposition au Conseil.</p><div className="proposal-list">{PROPOSALS.map(p => <label className={`proposal ${proposal === p.id ? 'selected' : ''}`} key={p.id}><input type="radio" name="proposal" value={p.id} checked={proposal === p.id} onChange={() => setProposal(p.id)} disabled={session.phase === 'finished'} /><span><strong>{p.title}</strong><small>{p.description}</small></span></label>)}</div><button className="secondary-action" disabled={pending || session.phase === 'finished' || session.day >= 7} onClick={() => act(() => request<Session>(`/api/sessions/${session.id}/proposals`, { proposal }))}>Négocier cette proposition</button><button className="primary-action" disabled={pending || session.phase === 'finished'} onClick={() => act(() => request<Session>(`/api/sessions/${session.id}/vote`, { proposal }))}>Soumettre au vote →</button><p className="footnote">Le vote est définitif. 3 voix sur 4 sont nécessaires. Les règles sont identiques avec ou sans LLM.</p></div>
-            <div className="panel session-panel"><span className="eyebrow">SESSION</span><p>{session.effective_mode === 'llm' ? 'Agents LLM actifs' : 'Mode scénarisé'}</p><button className="text-action" onClick={() => { setSession(null); setError(''); }}>Nouvelle partie ↗</button></div>
+            <div className="panel session-panel"><span className="eyebrow">SESSION</span><p>{session.effective_mode === 'llm' ? 'Agents LLM actifs' : 'Mode scénarisé'}</p><button className="text-action" onClick={() => { if (ANDROID_BUILD && !API) clearOfflineSession(window.localStorage); setSession(null); setError(''); }}>Nouvelle partie ↗</button></div>
           </aside>
         </div>
       )}
