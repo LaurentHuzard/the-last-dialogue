@@ -15,13 +15,13 @@ cd frontend
 npm ci
 ANDROID_BUILD=1 NEXT_PUBLIC_ANDROID_BUILD=1 NEXT_PUBLIC_API_URL= npm run build
 cd ..
-mkdir -p android/app/src/main/assets/www
-cp -a frontend/out/. android/app/src/main/assets/www/
+mkdir -p android/app/src/main/assets
+cp -a frontend/out/. android/app/src/main/assets/
 cd android
 gradle :app:assembleDebug
 ```
 
-The result is `android/app/build/outputs/apk/debug/app-debug.apk`.
+The result is `android/app/build/outputs/apk/debug/app-debug.apk`. Run `python3 android/scripts/verify_apk_assets.py android/app/build/outputs/apk/debug/app-debug.apk` to assert that the WebView entry page and its root-relative JS/CSS resources are all loadable. `WebViewAssetLoader` maps `/index.html` to `assets/index.html` in the APK; never copy the static export under `assets/www/`.
 
 ## Modes and privacy
 

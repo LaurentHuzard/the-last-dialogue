@@ -41,9 +41,12 @@ jobs:
       - name: Bundle the generated static site
         run: |
           test -s frontend/out/index.html
-          mkdir -p android/app/src/main/assets/www
-          cp -a frontend/out/. android/app/src/main/assets/www/
-          test -d android/app/src/main/assets/www/_next
+          # AssetsPathHandler("/") maps /index.html to assets/index.html.
+          # Root-relative /_next/... must also resolve to assets/_next/...
+          mkdir -p android/app/src/main/assets
+          cp -a frontend/out/. android/app/src/main/assets/
+          test -s android/app/src/main/assets/index.html
+          test -d android/app/src/main/assets/_next/static
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -62,10 +65,7 @@ jobs:
       - name: Verify APK and checksum
         run: |
           test -s android/app/build/outputs/apk/debug/app-debug.apk
-          unzip -Z1 android/app/build/outputs/apk/debug/app-debug.apk > /tmp/last-dialogue-apk-files.txt
-          grep -q '^assets/www/index.html$' /tmp/last-dialogue-apk-files.txt
-          grep -Eq '^assets/www/_next/static/.*\.js$' /tmp/last-dialogue-apk-files.txt
-          grep -Eq '^assets/www/_next/static/.*\.css$' /tmp/last-dialogue-apk-files.txt
+          python3 android/scripts/verify_apk_assets.py android/app/build/outputs/apk/debug/app-debug.apk
           sha256sum android/app/build/outputs/apk/debug/app-debug.apk | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Upload installable APK to this PR run
         uses: actions/upload-artifact@v4
