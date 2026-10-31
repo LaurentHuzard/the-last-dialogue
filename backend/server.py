@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from agents import council_reaction, is_available, propose_mission, response_to_archive
+from agents import LLM_MODEL, council_reaction, is_available, propose_mission, response_to_archive
 from game import GameRuleError, Session, create_session, negotiate, submit_archive, vote
 
 app = FastAPI(title="The Last Dialogue API", version="0.1.0")
@@ -46,6 +46,12 @@ def find_session(session_id: str) -> Session:
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/api/capabilities")
+def capabilities():
+    """Read-only identification for the optional Android Tailscale connection."""
+    return {"app": "the-last-dialogue", "llm_configured": is_available(), "model": LLM_MODEL}
 
 
 @app.post("/api/sessions")

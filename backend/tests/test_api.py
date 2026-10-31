@@ -15,6 +15,14 @@ class ApiTests(unittest.TestCase):
         sessions.clear()
         self.client = TestClient(app)
 
+    def test_android_backend_capabilities_and_cors(self):
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "local-test-key"}):
+            response = self.client.get("/api/capabilities", headers={"Origin": "https://appassets.androidplatform.net"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["app"], "the-last-dialogue")
+        self.assertTrue(response.json()["llm_configured"])
+        self.assertEqual(response.headers.get("access-control-allow-origin"), "https://appassets.androidplatform.net")
+
     def test_end_to_end_scripted_mode(self):
         with patch.dict(os.environ, {"OPENAI_API_KEY": ""}):
             r = self.client.post("/api/sessions", json={"mode": "scripted"})
