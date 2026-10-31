@@ -87,3 +87,9 @@ footer { border-top:1px solid var(--line); padding:22px 0; font-size:10px; lette
 .remote-buttons { display:flex; align-items:center; flex-wrap:wrap; gap:14px; }
 .remote-buttons .secondary-action { width:auto; min-width:180px; }
 .remote-panel .notice { color:#e8cea0; border-left:3px solid #ddad66; padding:8px 12px; background:#44371f55; }
+
+/* Player-to-delegate free dialogue remains optional; rules stay local. */
+.delegate-chat { border-top:1px solid var(--line); padding-top:18px; margin-top:14px; display:flex; flex-direction:column; gap:14px; }
+.delegate-chat label { display:flex; flex-direction:column; gap:7px; color:var(--muted); font-size:12px; }
+.delegate-chat .secondary-action { max-width:420px; }
+.remote-panel code { color:var(--cyan); word-break:break-word; }

@@ -27,14 +27,14 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
-      - name: Test offline rules engine
+      - name: Test local rules and direct MUE agent client
         run: node --experimental-strip-types --test frontend/tests/*.test.mjs
       - name: Build standalone Android web assets
         working-directory: frontend
         env:
           ANDROID_BUILD: '1'
           NEXT_PUBLIC_ANDROID_BUILD: '1'
-          # No backend is baked into public APKs. LLM mode falls back transparently.
+          # No hostname or key is baked in. Direct llama.cpp calls are opt-in.
           NEXT_PUBLIC_API_URL: ''
           NEXT_TELEMETRY_DISABLED: '1'
         run: npm run build
