@@ -1,42 +1,61 @@
-# The Last Dialogue — Android debug build v0.1.3
+# Android v0.2.0 : jeu hors ligne + agents sur MUE
 
-This is a **small Android WebView shell**, not a hosted website shortcut. The GitHub Actions job builds a Next.js **static export**, embeds the compiled frontend into the APK, then compiles the Java/Gradle Android project. A local TypeScript rules engine handles the same scripted scenario as the backend; the Android package needs **no server or network to play**.
+L'application est une WebView Android emballant le frontend Next.js exporté
+en fichiers statiques. Les règles et les archives résident localement dans
+la WebView. Le mode **Agents LLM** parle maintenant **directement** à
+llama.cpp sur MUE via une adresse HTTPS Tailscale Serve : **pas de FastAPI
+pour la version Android**.
 
-## Get the APK from pull request #1
+## Télécharger une build
 
-Open the **Android debug APK** workflow run attached to the PR, then under **Artifacts** download `the-last-dialogue-android-debug`. The automated PR comment links directly to the artifact once the job succeeds. Extract the ZIP and install `app-debug.apk` on your Android phone. This debug APK is not Play Store signed. Since GitHub Actions uses an ephemeral debug keystore, uninstall an earlier APK when you get a signature mismatch while upgrading.
+Sur la [PR #1](https://github.com/LaurentHuzard/the-last-dialogue/pull/1),
+ouvre le dernier workflow **Android debug APK** réussi et télécharge
+l'artifact \`the-last-dialogue-android-debug\`. Après extraction du ZIP,
+installe \`app-debug.apk\`. Les clés de signature debug peuvent changer
+entre les builds : si Android refuse une mise à jour pour problème de
+signature, il faudra désinstaller l'ancien build, ce qui efface les
+parties sauvegardées localement.
 
-## Build locally
+## Jeu avec ou sans MUE
 
-Requires Node 22+, npm, Java 17, Android SDK platform 35, Android build-tools 35 and Gradle 8.10.2.
+- **Sans LLM** : entièrement local, sans connexion, sans requête réseau
+  générée par le jeu. Missions prédéfinies et règles déterministes.
+- **Agents LLM** : URL Tailscale HTTPS + clé API llama.cpp en mémoire +
+  alias de modèle choisi dans la liste \`/v1/models\`. Sélène propose
+  une mission, Ada réagit à une archive, Ivo réagit à une négociation,
+  et le joueur peut envoyer une question libre à l'un des trois.
+- Les personnages n'ont pas accès aux outils de MUE, n'effectuent
+  pas de recherches web et ne contrôlent pas les votes du jeu.
+- Les sources externes sont ouvertes dans le navigateur système.
+  Aucune géolocalisation, caméra ou permission d'accès aux fichiers.
 
-```bash
+**Guide :** [Connecter directement Android à MUE](../docs/mue-tailscale.md).
+
+## Compiler en local
+
+Node.js 22+, Java 17, Android SDK 35, Android build-tools 35, Gradle 8.10.2 :
+
+~~~bash
 cd frontend
 npm ci
+node --experimental-strip-types --test tests/*.test.mjs
 ANDROID_BUILD=1 NEXT_PUBLIC_ANDROID_BUILD=1 NEXT_PUBLIC_API_URL= npm run build
 cd ..
 mkdir -p android/app/src/main/assets
 cp -a frontend/out/. android/app/src/main/assets/
 cd android
-gradle :app:assembleDebug
-```
+gradle --no-daemon :app:assembleDebug
+cd ..
+python3 android/scripts/verify_apk_assets.py android/app/build/outputs/apk/debug/app-debug.apk
+~~~
 
-The result is `android/app/build/outputs/apk/debug/app-debug.apk`. Run `python3 android/scripts/verify_apk_assets.py android/app/build/outputs/apk/debug/app-debug.apk` to assert that the WebView entry page and its root-relative JS/CSS resources are all loadable. `WebViewAssetLoader` maps `/index.html` to `assets/index.html` in the APK; never copy the static export under `assets/www/`.
+Le fichier produit est \`android/app/build/outputs/apk/debug/app-debug.apk\`.
 
-## Modes and privacy
+## Confidentialité et limites
 
-- **Scripted offline**: Fully functional on device, including local archive submission, negotiations, and final vote. Sessions persist to private WebView localStorage and can resume after restarting the app. Deleting the app's storage clears them.
-- **LLM via MUE/Tailscale**: On the welcome screen, enter the HTTPS Tailscale Serve URL of the FastAPI backend running on MUE (not llama.cpp port 8003). Enter an optional **game access API key** configured as `THE_LAST_DIALOGUE_ACCESS_TOKEN` on the backend, then tap **Tester et enregistrer**. Select **Agents LLM** for remote delegates. The APK embeds no key or server hostname; without a configured URL, LLM selection falls back to local scripted mode with a clear warning.
-- **Scripted mode stays local** even when MUE is configured. In LLM mode, player archives and choices are sent through Tailscale to the remote FastAPI process.
-- **Real-world sources**: OpenAlex, INPN and player-supplied URLs open in the system browser. An entered URL is not source verification. No camera, GPS, notifications or account permissions.
-- **Security**: Static assets are served through AndroidX WebViewAssetLoader's local HTTPS origin. File/content access and mixed content are disabled; there is no JavaScript bridge. This is a test build, not a production release.
-
-## Next steps
-
-Secure user accounts and remote sessions before exposing a backend, add configurable verified HTTPS backend selection for the LLM mode, replace debug signing with a stable key for upgradeable releases, and validate gameplay and layout on physical Android devices.
-
-## MUE connection
-
-See [MUE / Tailscale installation](../docs/mue-tailscale.md) for the router key, backend environment, Tailscale Serve setup and Android UI configuration.
-
-**Game API key security:** the masked field is not persisted in WebView localStorage, Android preferences, Git, or the APK; enter it again after restarting the game. Use a separate token from the MUE llama.cpp router key. Use Tailscale Serve HTTPS and scope ACLs to authorized devices.
+L'URL Tailscale est sauvée dans localStorage. La clé est stockée dans le
+state React de la session courante et n'est pas sérialisée. Les messages et
+archives sont enregistrés dans le stockage privé WebView, sans chiffrage
+supplémentaire. Ne pas exposer le routeur avec Tailscale Funnel ni partager
+la clé MUE publiquement. Un appareil compromis peut compromettre une clé
+saisie dans l'application ; prévoir sa rotation si nécessaire.
