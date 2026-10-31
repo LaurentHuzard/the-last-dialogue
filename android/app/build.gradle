@@ -1,0 +1,32 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'tv.octomue.thelastdialogue'
+    compileSdk 35
+
+    // aapt's default <dir>_* ignore rule silently drops Next.js /_next assets.
+    // Keep the usual junk-file exclusions without excluding underscore directories.
+    androidResources {
+        ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+    }
+
+    defaultConfig {
+        applicationId 'tv.octomue.thelastdialogue'
+        minSdk 24
+        targetSdk 34
+        versionCode 3
+        versionName '0.1.2-mue'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // Trusted https://appassets.androidplatform.net origin for local packaged assets.
+    implementation 'androidx.webkit:webkit:1.12.1'
+}

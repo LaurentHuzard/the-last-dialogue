@@ -1,22 +1,21 @@
-version: '3.8'
-
 services:
   backend:
     build: ./backend
     ports:
       - "8080:8080"
     environment:
-      - PORT=8080
-      # Add API keys here or in a .env file
-      # - OPENAI_API_KEY=${OPENAI_API_KEY}
-    volumes:
-      - ./backend:/app:ro # Mount code for easier inspection (though Dockerfile is static)
-
+      PORT: "8080"
+      CORS_ORIGINS: "http://localhost:3000"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      THE_LAST_DIALOGUE_MODEL: ${THE_LAST_DIALOGUE_MODEL:-gpt-4o-mini}
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: "http://localhost:8080"
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8080
+      NEXT_PUBLIC_API_URL: "http://localhost:8080"
     depends_on:
       - backend

@@ -1,26 +1,89 @@
 @import "tailwindcss";
+:root { --background:#0b1012; --foreground:#e7e8df; --panel:#151d20; --line:#2b393c; --muted:#a1b0ad; --accent:#b9d29a; --cyan:#89c5bf; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--background); color:var(--foreground); font-family:Arial,Helvetica,sans-serif; }
+button, input, select, textarea { font:inherit; }
+button { cursor:pointer; }
+button:disabled { cursor:not-allowed; opacity:.5; }
+a { color:var(--cyan); text-underline-offset:4px; }
+a:hover { color:#d4efdf; }
+.app-shell { min-height:100vh; max-width:1600px; margin:auto; padding:0 32px; }
+.topbar { min-height:102px; display:flex; align-items:center; justify-content:space-between; gap:20px; border-bottom:1px solid var(--line); }
+.topbar h1 { margin:6px 0 0; font-size:clamp(20px,2.5vw,32px); letter-spacing:.11em; font-weight:800; }
+.title-dot { color:var(--accent); }
+.eyebrow { font-size:10px; letter-spacing:.2em; font-weight:700; color:var(--accent); }
+.topbar-right { display:flex; flex-direction:column; gap:8px; align-items:flex-end; font-size:11px; letter-spacing:.12em; color:var(--muted); }
+.topbar-right strong { font-size:13px; color:var(--cyan); }
+.welcome { max-width:920px; padding:9vh 0; margin:auto; }
+.welcome h2 { font-family:Georgia,serif; font-size:clamp(38px,6vw,72px); font-weight:400; line-height:1.13; letter-spacing:-.03em; margin:18px 0; }
+.welcome h2 em { color:var(--accent); font-weight:400; }
+.welcome > p:not(.eyebrow):not(.footnote) { max-width:670px; line-height:1.7; color:var(--muted); }
+.mode-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:40px 0 26px; }
+.mode-card { color:var(--foreground); text-align:left; min-height:160px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:10px; }
+.mode-card.selected { border-color:var(--accent); box-shadow:inset 0 0 0 1px #b9d29a55; }
+.mode-card .mode-mark { font-size:24px; color:var(--accent); }
+.mode-card strong { font-size:17px; }
+.mode-card small, .proposal small { color:var(--muted); line-height:1.5; }
+.primary-action, .secondary-action { border-radius:6px; padding:12px 16px; font-weight:700; transition:background .15s; width:100%; }
+.primary-action { background:var(--accent); border:1px solid var(--accent); color:#142019; }
+.primary-action:hover:not(:disabled) { background:#d9e7bb; }
+.secondary-action { background:#223b39; border:1px solid #40605a; color:#c5e5d8; }
+.secondary-action:hover:not(:disabled) { background:#30524d; }
+.footnote { font-size:11px; line-height:1.6; color:var(--muted); }
+.game-layout { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(290px,1fr); gap:22px; padding:26px 0; align-items:start; }
+.main-column, .side-column { display:flex; flex-direction:column; gap:20px; min-width:0; }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:22px; }
+.chapter-panel { background:linear-gradient(130deg,#172523,#151d20 66%); }
+.chapter-panel h2 { font-family:Georgia,serif; font-weight:400; font-size:clamp(27px,3vw,44px); margin:18px 0 8px; }
+.chapter-panel > p, .action-panel > p, .decision-panel > p, .message p { color:#c7d0cb; line-height:1.65; }
+.status-line { display:flex; gap:18px; flex-wrap:wrap; color:var(--cyan); font-size:12px; border-top:1px solid var(--line); padding-top:16px; margin-top:20px; }
+.notice { color:#e8cea0 !important; border-left:3px solid #ddad66; padding:8px 12px; background:#44371f55; }
+.verdict { display:flex; flex-direction:column; gap:10px; margin-top:18px; border:1px solid #a7bf8f; padding:16px; border-radius:8px; }
+.panel-header { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.live-mark { color:var(--muted); font-size:10px; letter-spacing:.07em; }
+.transcript { max-height:360px; overflow-y:auto; padding-top:15px; }
+.message { display:flex; gap:13px; padding:15px 0; border-bottom:1px solid var(--line); }
+.message:last-child { border-bottom:0; }
+.avatar { flex:none; width:38px; height:38px; display:grid; place-items:center; border:1px solid #45635c; border-radius:50%; background:#21302e; font-size:20px; color:var(--cyan); }
+.message strong { color:var(--accent); font-size:14px; }
+.message p { margin:6px 0 0; font-size:14px; white-space:pre-wrap; }
+.action-panel h3, .decision-panel h3 { font-family:Georgia,serif; font-size:24px; margin:14px 0 8px; }
+.tag { font-size:10px; letter-spacing:.15em; border:1px solid var(--line); padding:5px 10px; border-radius:30px; color:var(--cyan); }
+.source-links { display:flex; flex-wrap:wrap; gap:18px; font-size:12px; margin:14px 0 24px; }
+form { display:flex; flex-direction:column; gap:14px; }
+.field-row { display:grid; grid-template-columns:1fr 1.4fr; gap:14px; }
+form label { display:flex; flex-direction:column; gap:8px; font-size:12px; color:var(--muted); }
+input:not([type='radio']), textarea, select { background:#0c1417; border:1px solid #3a4b4c; border-radius:6px; color:var(--foreground); padding:11px; width:100%; }
+textarea { resize:vertical; }
+input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.archives-panel .muted { color:var(--muted); font-style:italic; font-family:Georgia,serif; }
+.archive { margin-top:14px; padding:15px; border-left:2px solid var(--cyan); background:#0e1617; overflow-wrap:anywhere; }
+.archive strong { display:block; margin:8px 0; }
+.archive p { font-size:13px; line-height:1.55; color:var(--muted); white-space:pre-wrap; }
+.archive a { font-size:12px; }
+.delegate-list { margin-top:20px; }
+.delegate { display:flex; align-items:center; gap:11px; padding:12px 0; border-bottom:1px solid var(--line); }
+.delegate div { flex:1; display:flex; flex-direction:column; gap:4px; }
+.delegate strong { font-size:14px; }
+.delegate small { color:var(--muted); font-size:11px; }
+.position { font-family:monospace; color:var(--accent); font-size:16px; }
+.proposal-list { display:flex; flex-direction:column; gap:9px; margin:20px 0; }
+.proposal { display:flex; align-items:flex-start; gap:12px; padding:12px; border:1px solid var(--line); border-radius:7px; cursor:pointer; }
+.proposal.selected { border-color:#7ca09a; background:#263a38; }
+.proposal input { accent-color:var(--accent); margin-top:5px; }
+.proposal span { display:flex; flex-direction:column; gap:5px; }
+.proposal strong { font-size:13px; }
+.decision-panel > button + button { margin-top:10px; }
+.session-panel p { font-size:13px; }
+.text-action { border:0; background:transparent; padding:4px 0; color:var(--cyan); font-size:12px; }
+.error-banner { position:sticky; bottom:15px; margin:auto; max-width:780px; padding:15px 20px; border:1px solid #b66b69; background:#4e2426; border-radius:8px; color:#ffe4dc; }
+footer { border-top:1px solid var(--line); padding:22px 0; font-size:10px; letter-spacing:.15em; color:var(--muted); }
+@media(max-width:850px) { .app-shell { padding:0 16px; } .game-layout { grid-template-columns:1fr; } .side-column { grid-row:2; } .topbar-right { display:none; } .mode-grid { grid-template-columns:1fr; } .field-row { grid-template-columns:1fr; } .panel { padding:17px; } }
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+/* Private Tailscale API settings appear only in the Android build. */
+.remote-panel { margin-bottom:24px; background:#142125; display:flex; flex-direction:column; gap:14px; }
+.remote-panel > p { font-size:13px; line-height:1.6; color:var(--muted); margin:0; }
+.remote-panel label { display:flex; flex-direction:column; gap:8px; font-size:12px; color:var(--muted); }
+.remote-buttons { display:flex; align-items:center; flex-wrap:wrap; gap:14px; }
+.remote-buttons .secondary-action { width:auto; min-width:180px; }
+.remote-panel .notice { color:#e8cea0; border-left:3px solid #ddad66; padding:8px 12px; background:#44371f55; }
