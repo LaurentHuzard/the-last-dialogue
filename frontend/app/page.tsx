@@ -1,8 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { clearOfflineSession, offlineRequest, resumeOfflineSession } from '../lib/offline-game';
-import { BACKEND_STORAGE_KEY, normalizeTailscaleBackend, verifyBackend } from '../lib/tailscale-backend';
+import { clearOfflineSession, resumeOfflineSession } from '../lib/offline-game';
+import { androidGameRequest, talkToDelegate, type DelegateId } from '../lib/agent-game';
+import {
+  MUE_ORIGIN_STORAGE_KEY, normalizeTailscaleLlamaOrigin, listLlamaModels,
+  preferredModel, type LlamaConnection,
+} from '../lib/tailscale-backend';
 
 type Mode = 'scripted' | 'llm';
 type Proposal = 'sanctuary' | 'compromise' | 'construction';
@@ -43,20 +47,21 @@ const DELEGATES = [
   { id: 'ada', name: 'Ada', role: 'Archives', symbol: '⌘' },
 ];
 
-async function request<T>(url: string, data?: unknown, androidRemoteUrl = '', accessToken = ''): Promise<T> {
-  // A scripted Android game always runs locally, regardless of MUE settings.
-  const base = ANDROID_BUILD && androidRemoteUrl ? normalizeTailscaleBackend(androidRemoteUrl) : (ANDROID_BUILD ? '' : API);
-  if (ANDROID_BUILD && !base) {
-    return offlineRequest(url, data, window.localStorage) as T;
+async function request<T>(
+  url: string, data?: unknown, connection?: LlamaConnection | null,
+): Promise<T> {
+  // Android always runs the local game engine; only prose is sent to MUE.
+  if (ANDROID_BUILD) {
+    return androidGameRequest(url, data, window.localStorage, connection) as Promise<T>;
   }
-  const res = await fetch(`${base}${url}`, {
+  const res = await fetch(API + url, {
     method: data === undefined ? 'GET' : 'POST',
-    headers: { 'Content-Type': 'application/json', ...(ANDROID_BUILD && base && accessToken ? { Authorization: 'Bearer ' + accessToken } : {}) },
+    headers: { 'Content-Type': 'application/json' },
     ...(data === undefined ? {} : { body: JSON.stringify(data) }),
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
-    throw new Error(typeof error.detail === 'string' ? error.detail : `Erreur du serveur (${res.status})`);
+    throw new Error(typeof error.detail === 'string' ? error.detail : 'Erreur du serveur (' + res.status + ')');
   }
   return res.json() as Promise<T>;
 }
@@ -71,19 +76,22 @@ export default function Home() {
   const [proposal, setProposal] = useState<Proposal>('compromise');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const [backendInput, setBackendInput] = useState('');
-  const [backendUrl, setBackendUrl] = useState('');
-  // Sensitive access token lives only in React memory, never localStorage or APK assets.
-  const [backendAccessToken, setBackendAccessToken] = useState('');
-  const [sessionAccessToken, setSessionAccessToken] = useState('');
-  const [sessionBackend, setSessionBackend] = useState('');
-  const [backendMessage, setBackendMessage] = useState('');
-  const [checkingBackend, setCheckingBackend] = useState(false);
+  const [mueInput, setMueInput] = useState('');
+  const [mueOrigin, setMueOrigin] = useState('');
+  // The router API key is kept in memory only. Never persist or embed it.
+  const [mueKey, setMueKey] = useState('');
+  const [mueModels, setMueModels] = useState<string[]>([]);
+  const [mueModel, setMueModel] = useState('');
+  const [activeConnection, setActiveConnection] = useState<LlamaConnection | null>(null);
+  const [connectionMessage, setConnectionMessage] = useState('');
+  const [checkingMue, setCheckingMue] = useState(false);
+  const [speaker, setSpeaker] = useState<DelegateId>('selene');
+  const [question, setQuestion] = useState('');
 
   useEffect(() => {
     if (ANDROID_BUILD) {
-      const savedUrl = window.localStorage.getItem(BACKEND_STORAGE_KEY);
-      if (savedUrl) { setBackendUrl(savedUrl); setBackendInput(savedUrl); }
+      const savedUrl = window.localStorage.getItem(MUE_ORIGIN_STORAGE_KEY);
+      if (savedUrl) setMueInput(savedUrl); // Re-test connection and re-enter key after restart.
       const saved = resumeOfflineSession(window.localStorage);
       if (saved) queueMicrotask(() => setSession(saved as Session));
     }
@@ -103,40 +111,60 @@ export default function Home() {
   }
 
   async function connectMue() {
-    setCheckingBackend(true);
-    setBackendMessage('Vérification de la connexion Tailscale…');
+    setCheckingMue(true);
+    setConnectionMessage('Lecture des modèles du routeur MUE…');
     try {
-      const normalized = normalizeTailscaleBackend(backendInput);
-      const capabilities = await verifyBackend(normalized, fetch, backendAccessToken);
-      setBackendInput(normalized);
-      setBackendUrl(normalized);
-      window.localStorage.setItem(BACKEND_STORAGE_KEY, normalized);
-      setBackendMessage(capabilities.llm_configured
-        ? 'Backend connecté. Modèle déclaré : ' + capabilities.model + ' (inférence non encore testée).'
-        : 'Backend connecté, mais la clé du routeur MUE manque dans FastAPI.');
+      const normalized = normalizeTailscaleLlamaOrigin(mueInput);
+      const models = await listLlamaModels(normalized, mueKey);
+      const selected = preferredModel(models, mueModel);
+      setMueOrigin(normalized);
+      setMueInput(normalized);
+      setMueModels(models);
+      setMueModel(selected);
+      window.localStorage.setItem(MUE_ORIGIN_STORAGE_KEY, normalized);
+      setConnectionMessage('llama-server connecté : ' + models.length +
+        ' modèle(s) disponible(s), dont ' + selected + '.');
     } catch (reason) {
-      setBackendMessage('Connexion impossible : ' + (reason instanceof Error ? reason.message : 'erreur réseau. Vérifie Tailscale.'));
+      setMueOrigin('');
+      setMueModels([]);
+      setMueModel('');
+      setConnectionMessage(reason instanceof Error ? reason.message : 'Connexion impossible : vérifie Tailscale.');
     } finally {
-      setCheckingBackend(false);
+      setCheckingMue(false);
     }
   }
 
   function disconnectMue() {
-    window.localStorage.removeItem(BACKEND_STORAGE_KEY);
-    setBackendUrl('');
-    setBackendInput('');
-    setBackendAccessToken('');
-    setBackendMessage('Connexion MUE effacée. Le mode hors ligne reste disponible.');
+    window.localStorage.removeItem(MUE_ORIGIN_STORAGE_KEY);
+    setMueOrigin('');
+    setMueInput('');
+    setMueModels([]);
+    setMueModel('');
+    setMueKey('');
+    setActiveConnection(null);
+    setConnectionMessage('MUE déconnecté. Le mode scénarisé reste disponible hors ligne.');
   }
 
   function startGame() {
-    const remote = ANDROID_BUILD && mode === 'llm' ? backendUrl : '';
+    const connection: LlamaConnection | null = ANDROID_BUILD && mode === 'llm' && mueOrigin && mueModel
+      ? { origin: mueOrigin, apiKey: mueKey, model: mueModel }
+      : null;
     void act(async () => {
-      const token = remote ? backendAccessToken : '';
-      const started = await request<Session>('/api/sessions', { mode }, remote, token);
-      setSessionAccessToken(token);
-      setSessionBackend(remote);
+      const started = await request<Session>('/api/sessions', { mode }, connection);
+      setActiveConnection(started.effective_mode === 'llm' ? connection : null);
       return started;
+    });
+  }
+
+  function askDelegate() {
+    if (!session || !activeConnection || !question.trim() || pending) return;
+    const original = question;
+    void act(async () => {
+      const updated = await talkToDelegate(
+        session, speaker, original, window.localStorage, activeConnection,
+      );
+      setQuestion('');
+      return { ...updated };
     });
   }
 
@@ -157,44 +185,50 @@ export default function Home() {
               <span className="mode-mark">◌</span><strong>Sans LLM</strong><small>Partie scénarisée, sans clé API et sans génération de contenu.</small>
             </button>
             <button type="button" className={`mode-card ${mode === 'llm' ? 'selected' : ''}`} onClick={() => setMode('llm')} aria-pressed={mode === 'llm'}>
-              <span className="mode-mark">✳</span><strong>Agents LLM</strong><small>{ANDROID_BUILD ? (backendUrl ? 'Mode distant : les agents utilisent le backend MUE sur ton tailnet.' : 'Configure MUE via Tailscale ci-dessous. Sans serveur, le mode scénarisé prend le relais.') : 'Sélène propose une mission ; Ada et Ivo réagissent aux archives et négociations. Requiert un backend LLM configuré.'}</small>
+              <span className="mode-mark">✳</span><strong>Agents LLM</strong><small>{ANDROID_BUILD ? (mueOrigin ? 'Agents exécutés via llama-server sur MUE, avec les règles conservées sur Android.' : 'Connecte directement le routeur MUE ci-dessous. Sans connexion, le jeu reste scénarisé.') : 'Sélène propose une mission ; Ada et Ivo réagissent aux archives et négociations via le backend web.'}</small>
             </button>
           </div>
           {ANDROID_BUILD && <div className="panel remote-panel">
-            <span className="eyebrow">CERVEAU DISTANT / MUE VIA TAILSCALE</span>
-            <p>Pour les agents LLM, démarre l’API The Last Dialogue sur MUE et expose-la uniquement à ton tailnet avec Tailscale Serve. Aucune clé API n&apos;est enregistrée dans cette application.</p>
-            <label><span>Adresse HTTPS Tailscale Serve</span>
+            <span className="eyebrow">CERVEAU DISTANT / LLAMA-SERVER VIA TAILSCALE</span>
+            <p>Pas de FastAPI à installer : Android gère le jeu et demande directement les dialogues à llama.cpp sur MUE, via Tailscale Serve en HTTPS.</p>
+            <label><span>URL HTTPS de MUE via Tailscale Serve</span>
               <input type="url" autoComplete="url" spellCheck={false}
                 placeholder="https://mue.mon-tailnet.ts.net"
-                value={backendInput} onChange={event => {
-                  setBackendInput(event.target.value);
-                  // A changed URL must be re-tested before it can receive a secret.
-                  setBackendUrl('');
-                  setBackendMessage('');
+                value={mueInput} onChange={event => {
+                  setMueInput(event.target.value);
+                  setMueOrigin('');
+                  setMueModels([]);
+                  setConnectionMessage('');
                 }} />
             </label>
-            <label><span>Clé API d&apos;accès au jeu (facultative si le backend n&apos;en exige pas)</span>
+            <label><span>Clé API llama.cpp (si le routeur en exige une)</span>
               <input type="password" autoComplete="off" spellCheck={false}
-                placeholder="Saisir une clé pour The Last Dialogue"
-                value={backendAccessToken}
+                placeholder="Clé d&apos;accès au routeur MUE"
+                value={mueKey}
                 onChange={event => {
-                  setBackendAccessToken(event.target.value);
-                  setBackendMessage('');
+                  setMueKey(event.target.value);
+                  setMueOrigin('');
+                  setMueModels([]);
+                  setConnectionMessage('');
                 }} />
             </label>
-            <p className="footnote">Cette clé authentifie l&apos;API du jeu. Elle est distincte de la clé llama.cpp, qui reste sur MUE. Elle n&apos;est pas sauvegardée : il faudra la ressaisir après fermeture de l&apos;app.</p>
-            <p className="footnote">Le port 8003 est réservé au routeur llama.cpp. Utilise <code>tailscale serve --bg 8080</code> et saisis l&apos;URL HTTPS indiquée par Tailscale.</p>
+            <p className="footnote">La clé reste en mémoire et n&apos;est ni enregistrée dans les archives ni intégrée à l&apos;APK. Ne la saisis que sur un appareil de confiance.</p>
             <div className="remote-buttons">
-              <button type="button" className="secondary-action" disabled={checkingBackend || !backendInput.trim()} onClick={() => void connectMue()}>
-                {checkingBackend ? 'Test de connexion…' : 'Tester et enregistrer'}
+              <button type="button" className="secondary-action" disabled={checkingMue || !mueInput.trim()} onClick={() => void connectMue()}>
+                {checkingMue ? 'Recherche des modèles…' : 'Tester /v1/models'}
               </button>
-              {backendUrl && <button type="button" className="text-action" onClick={disconnectMue}>Déconnecter MUE</button>}
+              {mueOrigin && <button type="button" className="text-action" onClick={disconnectMue}>Déconnecter MUE</button>}
             </div>
-            {backendMessage && <p role="status" className="notice">{backendMessage}</p>}
-            <p className="footnote">L’URL reste sur ton appareil. MUE doit être joignable via Tailscale ; le mode sans LLM reste entièrement hors ligne.</p>
+            {mueModels.length > 0 && <label><span>Modèle pour les délégués</span>
+              <select value={mueModel} onChange={event => setMueModel(event.target.value)}>
+                {mueModels.map(id => <option value={id} key={id}>{id}</option>)}
+              </select>
+            </label>}
+            {connectionMessage && <p role="status" className="notice">{connectionMessage}</p>}
+            <p className="footnote">Sur MUE, vérifie d&apos;abord <code>tailscale serve status</code>, puis expose le routeur local avec <code>tailscale serve --bg 8003</code> si nécessaire. Utilise l&apos;URL HTTPS affichée, sans :8003 et sans /v1.</p>
           </div>}
           <button className="primary-action" disabled={pending} onClick={startGame}>{pending ? 'Ouverture de la séance…' : 'Entrer dans l’Assemblée →'}</button>
-          <p className="footnote">{ANDROID_BUILD ? 'Mode scénarisé local : fonctionne sans réseau. En mode LLM, les archives et décisions passent par le backend MUE via Tailscale. Les recherches externes s’ouvrent dans le navigateur.' : 'Prototype local : sessions temporaires, aucune information envoyée à un service externe en mode sans LLM.'}</p>
+          <p className="footnote">{ANDROID_BUILD ? 'Règles, votes et archives restent sur Android. En mode Agents LLM, seules les instructions et données nécessaires aux dialogues partent vers MUE sur ton tailnet.' : 'Prototype web : la session est traitée par le backend FastAPI.'}</p>
         </section>
       ) : (
         <div className="game-layout">
@@ -218,18 +252,32 @@ export default function Home() {
                   </article>
                 ))}
               </div>
+              {ANDROID_BUILD && session.effective_mode === 'llm' && activeConnection && session.phase !== 'finished' &&
+                <form className="delegate-chat" onSubmit={event => { event.preventDefault(); askDelegate(); }}>
+                  <span className="eyebrow">DIALOGUE LIBRE AVEC LES DÉLÉGUÉS</span>
+                  <label><span>Interlocuteur</span><select value={speaker} onChange={event => setSpeaker(event.target.value as DelegateId)}>
+                    {DELEGATES.map(d => <option key={d.id} value={d.id}>{d.name} · {d.role}</option>)}
+                  </select></label>
+                  <label><span>Ta question ou ta proposition</span>
+                    <textarea rows={2} minLength={3} maxLength={500} required
+                      value={question} onChange={event => setQuestion(event.target.value)}
+                      placeholder="Demander une précision, contester un argument, proposer une piste…" />
+                  </label>
+                  <button className="secondary-action" type="submit" disabled={pending || !question.trim()}>Envoyer au délégué →</button>
+                  <p className="footnote">Le délégué peut discuter et proposer des idées. Il ne peut pas modifier les règles ni voter à ta place.</p>
+                </form>}
             </div>
 
             {session.phase !== 'finished' && <div className="panel action-panel">
               <div className="panel-header"><span className="eyebrow">MISSION PROPOSÉE PAR SÉLÈNE</span><span className="tag">2026</span></div>
               <h3>{session.mission.title}</h3><p>{session.mission.request}</p>
               <div className="source-links"><a href="https://openalex.org/" target={ANDROID_BUILD ? '_self' : '_blank'} rel="noopener noreferrer">Explorer OpenAlex ↗</a><a href="https://inpn.mnhn.fr/" target={ANDROID_BUILD ? '_self' : '_blank'} rel="noopener noreferrer">Explorer l&apos;INPN ↗</a></div>
-              <form onSubmit={(event) => { event.preventDefault(); void act(() => request<Session>(`/api/sessions/${session.id}/archives`, { kind, title, description, source_url: sourceUrl || null }, sessionBackend, sessionAccessToken)).then(() => { setTitle(''); setDescription(''); setSourceUrl(''); }); }}>
+              <form onSubmit={(event) => { event.preventDefault(); void act(() => request<Session>(`/api/sessions/${session.id}/archives`, { kind, title, description, source_url: sourceUrl || null }, activeConnection)).then(() => { setTitle(''); setDescription(''); setSourceUrl(''); }); }}>
                 <div className="field-row"><label><span>Nature de l&apos;archive</span><select value={kind} onChange={event => setKind(event.target.value as 'publication' | 'observation')}><option value="publication">Publication / document</option><option value="observation">Observation personnelle</option></select></label><label><span>Intitulé</span><input required maxLength={120} minLength={5} value={title} onChange={event => setTitle(event.target.value)} placeholder="Titre de la découverte" /></label></div>
                 <label><span>Source web {kind === 'publication' ? '(requise)' : '(facultative)'}</span><input required={kind === 'publication'} type="url" value={sourceUrl} onChange={event => setSourceUrl(event.target.value)} placeholder="https://…" /></label>
                 <label><span>Ce que tu as réellement trouvé ou observé</span><textarea required minLength={25} maxLength={1500} rows={3} value={description} onChange={event => setDescription(event.target.value)} placeholder="Décris l'observation ou résume les résultats. Une source déclarée n'est pas une preuve validée." /></label>
                 <button className="secondary-action" disabled={pending || session.archives.length >= 12} type="submit">{pending ? 'Transmission…' : 'Ajouter aux archives →'}</button>
-                <p className="footnote">Ne partage pas de localisation précise, de données personnelles ou de photos privées. {ANDROID_BUILD && !sessionBackend ? 'Les archives restent dans le stockage privé de cette application.' : 'Les données restent dans la session côté serveur (temporairement).'}</p>
+                <p className="footnote">Ne partage pas de localisation précise, de données personnelles ou de photos privées. {ANDROID_BUILD ? 'L’archive est conservée sur le téléphone. Sa description peut être transmise à Ada sur MUE pour commentaire.' : 'L’archive est conservée dans la session temporaire du backend.'}</p>
               </form>
             </div>}
 
@@ -238,8 +286,8 @@ export default function Home() {
 
           <aside className="side-column">
             <div className="panel delegates-panel"><span className="eyebrow">LE CONSEIL</span><div className="delegate-list">{DELEGATES.map(d => <div className="delegate" key={d.id}><span className="avatar">{d.symbol}</span><div><strong>{d.name}</strong><small>{d.role}</small></div><span className="position">{(session.positions[d.id] || 0) > 0 ? '+' : ''}{session.positions[d.id] || 0}</span></div>)}</div><p className="footnote">Position indicative dans ce conflit, pas un jugement moral.</p></div>
-            <div className="panel decision-panel"><span className="eyebrow">ORDRE DU JOUR · VOTE FINAL</span><h3>Le corridor énergétique</h3><p>Dépose tes preuves, échange des concessions et soumets une proposition au Conseil.</p><div className="proposal-list">{PROPOSALS.map(p => <label className={`proposal ${proposal === p.id ? 'selected' : ''}`} key={p.id}><input type="radio" name="proposal" value={p.id} checked={proposal === p.id} onChange={() => setProposal(p.id)} disabled={session.phase === 'finished'} /><span><strong>{p.title}</strong><small>{p.description}</small></span></label>)}</div><button className="secondary-action" disabled={pending || session.phase === 'finished' || session.day >= 7} onClick={() => act(() => request<Session>(`/api/sessions/${session.id}/proposals`, { proposal }, sessionBackend, sessionAccessToken))}>Négocier cette proposition</button><button className="primary-action" disabled={pending || session.phase === 'finished'} onClick={() => act(() => request<Session>(`/api/sessions/${session.id}/vote`, { proposal }, sessionBackend, sessionAccessToken))}>Soumettre au vote →</button><p className="footnote">Le vote est définitif. 3 voix sur 4 sont nécessaires. Les règles sont identiques avec ou sans LLM.</p></div>
-            <div className="panel session-panel"><span className="eyebrow">SESSION</span><p>{session.effective_mode === 'llm' ? 'Agents LLM configurés sur MUE' : 'Mode scénarisé'}{sessionBackend ? ' · réseau Tailscale' : ' · local'}</p><button className="text-action" onClick={() => { if (ANDROID_BUILD && !sessionBackend) clearOfflineSession(window.localStorage); setSessionBackend(''); setSessionAccessToken(''); setSession(null); setError(''); }}>Nouvelle partie ↗</button></div>
+            <div className="panel decision-panel"><span className="eyebrow">ORDRE DU JOUR · VOTE FINAL</span><h3>Le corridor énergétique</h3><p>Dépose tes preuves, échange des concessions et soumets une proposition au Conseil.</p><div className="proposal-list">{PROPOSALS.map(p => <label className={`proposal ${proposal === p.id ? 'selected' : ''}`} key={p.id}><input type="radio" name="proposal" value={p.id} checked={proposal === p.id} onChange={() => setProposal(p.id)} disabled={session.phase === 'finished'} /><span><strong>{p.title}</strong><small>{p.description}</small></span></label>)}</div><button className="secondary-action" disabled={pending || session.phase === 'finished' || session.day >= 7} onClick={() => act(() => request<Session>(`/api/sessions/${session.id}/proposals`, { proposal }, activeConnection))}>Négocier cette proposition</button><button className="primary-action" disabled={pending || session.phase === 'finished'} onClick={() => act(() => request<Session>(`/api/sessions/${session.id}/vote`, { proposal }, activeConnection))}>Soumettre au vote →</button><p className="footnote">Le vote est définitif. 3 voix sur 4 sont nécessaires. Les règles sont identiques avec ou sans LLM.</p></div>
+            <div className="panel session-panel"><span className="eyebrow">SESSION</span><p>{session.effective_mode === 'llm' ? 'Agents MUE · ' + (activeConnection ? activeConnection.model : 'connexion à rétablir') : 'Mode scénarisé · local'}</p><button className="text-action" onClick={() => { if (ANDROID_BUILD) clearOfflineSession(window.localStorage); setActiveConnection(null); setSession(null); setError(''); }}>Nouvelle partie ↗</button></div>
           </aside>
         </div>
       )}
