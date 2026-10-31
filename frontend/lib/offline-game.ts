@@ -144,7 +144,7 @@ export function voteOffline(session: Session, proposal: string): Session {
 
 /** Only persistent story state; never put connection secrets into Session. */
 export function saveOfflineSession(session: Session, store: SessionStorage): void {
-  saveOfflineSession(session, store);
+  store.setItem(KEY, JSON.stringify(session));
 }
 
 export function resumeOfflineSession(store: SessionStorage): Session | null {
@@ -179,7 +179,7 @@ export function offlineRequest(path: string, data: unknown, store: SessionStorag
   if (action === 'archives') addOfflineArchive(session, body);
   else if (action === 'proposals') negotiateOffline(session, body.proposal);
   else if (action === 'vote') voteOffline(session, body.proposal);
-  store.setItem(KEY, JSON.stringify(session));
+  saveOfflineSession(session, store);
   return session;
 }
 
