@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { clearOfflineSession, resumeOfflineSession } from '../lib/offline-game';
+import { clearOfflineSession, resumeOfflineSession, type Session } from '../lib/offline-game';
 import { androidGameRequest, talkToDelegate, type DelegateId } from '../lib/agent-game';
 import {
   MUE_ORIGIN_STORAGE_KEY, normalizeTailscaleLlamaOrigin, listLlamaModels,
@@ -10,30 +10,6 @@ import {
 
 type Mode = 'scripted' | 'llm';
 type Proposal = 'sanctuary' | 'compromise' | 'construction';
-type Archive = {
-  id: string;
-  kind: 'publication' | 'observation';
-  title: string;
-  description: string;
-  source_url: string | null;
-  provenance: string;
-};
-type Session = {
-  id: string;
-  mode: Mode;
-  effective_mode: Mode;
-  phase: 'investigation' | 'negotiation' | 'finished';
-  day: number;
-  influence: number;
-  archives: Archive[];
-  messages: { speaker: string; text: string }[];
-  positions: Record<string, number>;
-  agreements: Proposal[];
-  result: string | null;
-  mission: { agent: string; title: string; request: string };
-  warning: string | null;
-};
-
 const ANDROID_BUILD = process.env.NEXT_PUBLIC_ANDROID_BUILD === '1';
 const API = (process.env.NEXT_PUBLIC_API_URL || (ANDROID_BUILD ? '' : 'http://localhost:8080')).replace(/\/$/, '');
 const PROPOSALS: { id: Proposal; title: string; description: string }[] = [
