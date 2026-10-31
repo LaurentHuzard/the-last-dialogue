@@ -82,8 +82,9 @@ autre port HTTPS avec les options du Tailscale installé, ou adapter la
 configuration existante sans interrompre ses services.
 
 Sur le téléphone Android, activer Tailscale, rejoindre le même tailnet,
-puis ouvrir l'URL HTTPS suivie de /api/capabilities dans le navigateur.
-La réponse doit mentionner app: the-last-dialogue.
+puis ouvrir l'URL HTTPS suivie de `/health` dans le navigateur.
+La réponse doit être `{"status":"ok"}`. La route `/api/capabilities`
+exige la clé du jeu : utiliser le bouton **Tester et enregistrer** dans l'APK.
 
 ## 4. Dans la nouvelle APK
 
