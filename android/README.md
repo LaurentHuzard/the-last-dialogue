@@ -26,10 +26,15 @@ The result is `android/app/build/outputs/apk/debug/app-debug.apk`. Run `python3 
 ## Modes and privacy
 
 - **Scripted offline**: Fully functional on device, including local archive submission, negotiations, and final vote. Sessions persist to private WebView localStorage and can resume after restarting the app. Deleting the app's storage clears them.
-- **LLM**: Requires a separately hosted, secured backend. The public CI APK intentionally embeds no API key or server endpoint, so selecting LLM falls back to scripted mode with a warning. Do not embed provider API keys in the APK.
+- **LLM via MUE/Tailscale**: On the welcome screen, enter the HTTPS Tailscale Serve URL of the FastAPI backend running on MUE and tap **Tester et enregistrer**. Select **Agents LLM** for remote delegates. The APK embeds no key or server hostname; without a configured URL, LLM selection falls back to local scripted mode with a clear warning.
+- **Scripted mode stays local** even when MUE is configured. In LLM mode, player archives and choices are sent through Tailscale to the remote FastAPI process.
 - **Real-world sources**: OpenAlex, INPN and player-supplied URLs open in the system browser. An entered URL is not source verification. No camera, GPS, notifications or account permissions.
 - **Security**: Static assets are served through AndroidX WebViewAssetLoader's local HTTPS origin. File/content access and mixed content are disabled; there is no JavaScript bridge. This is a test build, not a production release.
 
 ## Next steps
 
 Secure user accounts and remote sessions before exposing a backend, add configurable verified HTTPS backend selection for the LLM mode, replace debug signing with a stable key for upgradeable releases, and validate gameplay and layout on physical Android devices.
+
+## MUE connection
+
+See [MUE / Tailscale installation](../docs/mue-tailscale.md) for the router key, backend environment, Tailscale Serve setup and Android UI configuration.

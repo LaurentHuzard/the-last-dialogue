@@ -28,7 +28,7 @@ jobs:
         working-directory: frontend
         run: npm ci
       - name: Test offline rules engine
-        run: node --experimental-strip-types --test frontend/tests/offline-game.test.mjs
+        run: node --experimental-strip-types --test frontend/tests/*.test.mjs
       - name: Build standalone Android web assets
         working-directory: frontend
         env:
