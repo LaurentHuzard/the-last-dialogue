@@ -142,6 +142,11 @@ export function voteOffline(session: Session, proposal: string): Session {
   return session;
 }
 
+/** Only persistent story state; never put connection secrets into Session. */
+export function saveOfflineSession(session: Session, store: SessionStorage): void {
+  saveOfflineSession(session, store);
+}
+
 export function resumeOfflineSession(store: SessionStorage): Session | null {
   const saved = store.getItem(KEY);
   if (!saved) return null;
@@ -160,7 +165,7 @@ export function offlineRequest(path: string, data: unknown, store: SessionStorag
     const requestedMode = (data as { mode?: Mode } | undefined)?.mode || 'scripted';
     if (requestedMode !== 'scripted' && requestedMode !== 'llm') throw new Error('Mode inconnu');
     const next = createOfflineSession(requestedMode);
-    store.setItem(KEY, JSON.stringify(next));
+    saveOfflineSession(next, store);
     return next;
   }
   const match = /^\/api\/sessions\/([^/]+)(?:\/(archives|proposals|vote))?$/.exec(path);
