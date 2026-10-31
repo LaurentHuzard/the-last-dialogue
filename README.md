@@ -2,7 +2,7 @@
 
 An experimental negotiation game set across two times: **real research in 2026** becomes **debated archives in fictional 2235**. You play a human delegate negotiating the future of an ancient forest with three other delegates. The first vertical slice includes an entirely offline-inference/scripted mode and an optional LLM-assisted mode.
 
-> **Prototype, not production-ready:** session storage is temporary and in-memory. There are no accounts or authorization and submitted archives have not been independently verified. Do not expose the backend publicly or enter personal/private data.
+> **Prototype, not production-ready:** The optional web/FastAPI backend stores sessions in memory and has no user accounts (it supports a shared Bearer key, which is not a substitute for account authorization). Android stores its sessions locally. Submitted archives are not scientifically verified. Do not expose the backend or router publicly or enter private data.
 
 ## Start locally
 
@@ -53,4 +53,4 @@ See [design scope and next steps](docs/vision-v1.md).
 
 ## Android APK (prototype)
 
-Pull requests now build a debug APK using `.github/workflows/android-apk.yml`. Download the `the-last-dialogue-android-debug` artifact from the linked GitHub Actions run, or follow its link in the PR discussion. The bundled scripted mode runs **entirely on-device** without a backend; selecting LLM on this build transparently falls back to scripted mode. See [Android build and limitations](android/README.md).
+Pull requests now build a debug APK using `.github/workflows/android-apk.yml`. Download the `the-last-dialogue-android-debug` artifact from the linked GitHub Actions run, or follow its link in the PR discussion. **Android v0.2.0 / direct MUE:** the bundled rules engine and archives run entirely on-device. The optional **Agents LLM** mode connects directly to MUE's OpenAI-compatible **llama-server** via HTTPS **Tailscale Serve**, using the user's locally entered router API key and chosen model. No FastAPI process is required on Android. Sélène can propose research missions, Ada/Ivo comment on choices, and players can question each delegate. Without MUE, the scripted mode is fully playable. See [Android build](android/README.md) and [direct Tailscale + MUE setup](docs/mue-tailscale.md).
