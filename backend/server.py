@@ -16,7 +16,6 @@ from game import GameRuleError, Session, create_session, negotiate, submit_archi
 
 app = FastAPI(title="The Last Dialogue API", version="0.1.0")
 origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,https://appassets.androidplatform.net").split(",") if o.strip()]
-app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST"], allow_headers=["Content-Type", "Authorization"])
 
 # The optional game access token is distinct from llama.cpp's inference key.
 # Only /api/* routes are protected; /health stays readable on localhost.
@@ -36,6 +35,9 @@ async def require_game_access_token(request: Request, call_next):
                 )
     return await call_next(request)
 
+
+# CORS must wrap the authentication middleware, including 401 responses.
+app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST"], allow_headers=["Content-Type", "Authorization"])
 
 # Prototype storage only; an actual deployment needs durable, per-user storage.
 sessions: dict[str, Session] = {}
