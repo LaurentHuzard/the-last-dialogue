@@ -23,6 +23,34 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(response.json()["llm_configured"])
         self.assertEqual(response.headers.get("access-control-allow-origin"), "https://appassets.androidplatform.net")
 
+    def test_protected_backend_requires_game_key_on_all_api_routes(self):
+        with patch.dict(os.environ, {"THE_LAST_DIALOGUE_ACCESS_TOKEN": "distinct-test-game-token"}):
+            without = self.client.get("/api/capabilities")
+            self.assertEqual(without.status_code, 401)
+            self.assertEqual(self.client.post("/api/sessions", json={"mode": "scripted"}).status_code, 401)
+            self.assertEqual(self.client.get("/api/sessions/anything").status_code, 401)
+            self.assertEqual(self.client.get("/health").status_code, 200)
+            wrong = self.client.get("/api/capabilities", headers={"Authorization": "Bearer wrong-token"})
+            self.assertEqual(wrong.status_code, 401)
+            valid = {"Authorization": "Bearer distinct-test-game-token"}
+            self.assertEqual(self.client.get("/api/capabilities", headers=valid).status_code, 200)
+            started = self.client.post("/api/sessions", json={"mode": "scripted"}, headers=valid)
+            self.assertEqual(started.status_code, 200)
+            sid = started.json()["id"]
+            self.assertEqual(self.client.get(f"/api/sessions/{sid}", headers=valid).status_code, 200)
+            self.assertEqual(self.client.get(f"/api/sessions/{sid}").status_code, 401)
+
+    def test_android_authorization_preflight(self):
+        with patch.dict(os.environ, {"THE_LAST_DIALOGUE_ACCESS_TOKEN": "distinct-test-game-token"}):
+            response = self.client.options("/api/sessions", headers={
+                "Origin": "https://appassets.androidplatform.net",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization,content-type",
+            })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("access-control-allow-origin"), "https://appassets.androidplatform.net")
+        self.assertIn("authorization", response.headers.get("access-control-allow-headers", "").lower())
+
     def test_end_to_end_scripted_mode(self):
         with patch.dict(os.environ, {"OPENAI_API_KEY": ""}):
             r = self.client.post("/api/sessions", json={"mode": "scripted"})

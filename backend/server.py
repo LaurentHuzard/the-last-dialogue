@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import os
+import secrets
 from threading import RLock
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -14,7 +16,26 @@ from game import GameRuleError, Session, create_session, negotiate, submit_archi
 
 app = FastAPI(title="The Last Dialogue API", version="0.1.0")
 origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,https://appassets.androidplatform.net").split(",") if o.strip()]
-app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
+app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST"], allow_headers=["Content-Type", "Authorization"])
+
+# The optional game access token is distinct from llama.cpp's inference key.
+# Only /api/* routes are protected; /health stays readable on localhost.
+@app.middleware("http")
+async def require_game_access_token(request: Request, call_next):
+    if request.method != "OPTIONS" and request.url.path.startswith("/api/"):
+        expected = os.getenv("THE_LAST_DIALOGUE_ACCESS_TOKEN", "")
+        if expected:
+            supplied = request.headers.get("authorization", "")
+            prefix = "Bearer "
+            token = supplied[len(prefix):] if supplied.startswith(prefix) else ""
+            if not secrets.compare_digest(token, expected):
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Clé API du jeu absente ou incorrecte."},
+                    headers={"Cache-Control": "no-store"},
+                )
+    return await call_next(request)
+
 
 # Prototype storage only; an actual deployment needs durable, per-user storage.
 sessions: dict[str, Session] = {}

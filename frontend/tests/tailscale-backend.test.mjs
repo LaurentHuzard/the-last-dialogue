@@ -34,3 +34,29 @@ test('rejects unrelated HTTPS services', async () => {
     }),
   })), /attendue/);
 });
+
+
+test('HTTP llama.cpp port gives actionable correction', () => {
+  assert.throws(
+    () => normalizeTailscaleBackend('http://mue.example.ts.net:8003/'),
+    /port 8003.*llama\.cpp/,
+  );
+});
+test('game token is sent as Bearer header and never in the URL', async () => {
+  let call;
+  await verifyBackend('https://mue.example.ts.net', async (url, init) => {
+    call = {url, init};
+    return {ok: true, json: async () => ({
+      app: 'the-last-dialogue', llm_configured: true, model: 'qwen35-9b',
+    })};
+  }, 'test-secret-token');
+  assert.equal(call.init.headers.Authorization, 'Bearer test-secret-token');
+  assert.equal(call.url, 'https://mue.example.ts.net/api/capabilities');
+  assert.ok(!call.url.includes('test-secret-token'));
+});
+test('401 explains an invalid game key', async () => {
+  await assert.rejects(verifyBackend('https://mue.example.ts.net', async () => ({status: 401, ok: false}), 'bad'), /Clé d'accès/);
+});
+test('404 explains the 8003 inference versus 8080 game backend mismatch', async () => {
+  await assert.rejects(verifyBackend('https://mue.example.ts.net', async () => ({status: 404, ok: false})), /port 8080/);
+});
