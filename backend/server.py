@@ -13,7 +13,7 @@ from agents import LLM_MODEL, council_reaction, is_available, propose_mission, r
 from game import GameRuleError, Session, create_session, negotiate, submit_archive, vote
 
 app = FastAPI(title="The Last Dialogue API", version="0.1.0")
-origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
+origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,https://appassets.androidplatform.net").split(",") if o.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
 
 # Prototype storage only; an actual deployment needs durable, per-user storage.
