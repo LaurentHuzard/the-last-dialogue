@@ -1,4 +1,4 @@
-# The Last Dialogue — Android debug build
+# The Last Dialogue — Android debug build v0.1.3
 
 This is a **small Android WebView shell**, not a hosted website shortcut. The GitHub Actions job builds a Next.js **static export**, embeds the compiled frontend into the APK, then compiles the Java/Gradle Android project. A local TypeScript rules engine handles the same scripted scenario as the backend; the Android package needs **no server or network to play**.
 
@@ -26,7 +26,7 @@ The result is `android/app/build/outputs/apk/debug/app-debug.apk`. Run `python3 
 ## Modes and privacy
 
 - **Scripted offline**: Fully functional on device, including local archive submission, negotiations, and final vote. Sessions persist to private WebView localStorage and can resume after restarting the app. Deleting the app's storage clears them.
-- **LLM via MUE/Tailscale**: On the welcome screen, enter the HTTPS Tailscale Serve URL of the FastAPI backend running on MUE and tap **Tester et enregistrer**. Select **Agents LLM** for remote delegates. The APK embeds no key or server hostname; without a configured URL, LLM selection falls back to local scripted mode with a clear warning.
+- **LLM via MUE/Tailscale**: On the welcome screen, enter the HTTPS Tailscale Serve URL of the FastAPI backend running on MUE (not llama.cpp port 8003). Enter an optional **game access API key** configured as `THE_LAST_DIALOGUE_ACCESS_TOKEN` on the backend, then tap **Tester et enregistrer**. Select **Agents LLM** for remote delegates. The APK embeds no key or server hostname; without a configured URL, LLM selection falls back to local scripted mode with a clear warning.
 - **Scripted mode stays local** even when MUE is configured. In LLM mode, player archives and choices are sent through Tailscale to the remote FastAPI process.
 - **Real-world sources**: OpenAlex, INPN and player-supplied URLs open in the system browser. An entered URL is not source verification. No camera, GPS, notifications or account permissions.
 - **Security**: Static assets are served through AndroidX WebViewAssetLoader's local HTTPS origin. File/content access and mixed content are disabled; there is no JavaScript bridge. This is a test build, not a production release.
@@ -38,3 +38,5 @@ Secure user accounts and remote sessions before exposing a backend, add configur
 ## MUE connection
 
 See [MUE / Tailscale installation](../docs/mue-tailscale.md) for the router key, backend environment, Tailscale Serve setup and Android UI configuration.
+
+**Game API key security:** the masked field is not persisted in WebView localStorage, Android preferences, Git, or the APK; enter it again after restarting the game. Use a separate token from the MUE llama.cpp router key. Use Tailscale Serve HTTPS and scope ACLs to authorized devices.

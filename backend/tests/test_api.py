@@ -27,6 +27,15 @@ class ApiTests(unittest.TestCase):
         with patch.dict(os.environ, {"THE_LAST_DIALOGUE_ACCESS_TOKEN": "distinct-test-game-token"}):
             without = self.client.get("/api/capabilities")
             self.assertEqual(without.status_code, 401)
+            self.assertNotIn("distinct-test-game-token", without.text)
+            failed_cors = self.client.get("/api/capabilities", headers={
+                "Origin": "https://appassets.androidplatform.net",
+            })
+            self.assertEqual(failed_cors.status_code, 401)
+            self.assertEqual(
+                failed_cors.headers.get("access-control-allow-origin"),
+                "https://appassets.androidplatform.net",
+            )
             self.assertEqual(self.client.post("/api/sessions", json={"mode": "scripted"}).status_code, 401)
             self.assertEqual(self.client.get("/api/sessions/anything").status_code, 401)
             self.assertEqual(self.client.get("/health").status_code, 200)

@@ -1,6 +1,6 @@
 # The Last Dialogue sur MUE via Tailscale
 
-L'APK Android v0.1.2 propose une connexion HTTPS facultative vers un backend
+L'APK Android v0.1.3 propose une connexion HTTPS facultative vers un backend
 FastAPI sur MUE. Les parties sans LLM continuent à fonctionner hors ligne.
 
 Architecture : Android (WebView) → Tailscale Serve HTTPS → FastAPI (8080) →
@@ -36,13 +36,31 @@ export THE_LAST_DIALOGUE_MODEL=qwen35-9b
 export THE_LAST_DIALOGUE_LLM_TIMEOUT=120
 export CORS_ORIGINS=https://appassets.androidplatform.net
 
+# Clé distincte de celle de MUE : autorise uniquement l'accès au jeu.
+mkdir -p ~/.config/the-last-dialogue
+chmod 700 ~/.config/the-last-dialogue
+python3 -c 'import secrets; print(secrets.token_urlsafe(32))' > ~/.config/the-last-dialogue/game-token
+chmod 600 ~/.config/the-last-dialogue/game-token
+export THE_LAST_DIALOGUE_ACCESS_TOKEN="$(cat ~/.config/the-last-dialogue/game-token)"
+
 uvicorn server:app --host 127.0.0.1 --port 8080
 ~~~
 
 Ce backend ne doit pas être exposé sur Internet. Il stocke actuellement
-les sessions en RAM et n'a pas encore d'authentification applicative.
+les sessions en RAM. Son authentification est un jeton partagé facultatif
+`THE_LAST_DIALOGUE_ACCESS_TOKEN`, nécessaire dans cette configuration.
+La clé n'est jamais committée ni incluse dans l'APK. Les ACL Tailscale
+constituent une protection supplémentaire.
 
-Test local : curl -fsS http://127.0.0.1:8080/api/capabilities
+Test local (avec jeton) :
+
+~~~bash
+curl -fsS -H "Authorization: Bearer $(cat ~/.config/the-last-dialogue/game-token)" \
+  http://127.0.0.1:8080/api/capabilities
+~~~
+
+Une requête sans jeton doit retourner HTTP 401.
+`/health` reste ouvert aux contrôles locaux.
 
 Le champ llm_configured signifie que les variables sont présentes, pas que
 le routeur MUE a réussi à produire une inférence.
@@ -71,12 +89,18 @@ La réponse doit mentionner app: the-last-dialogue.
 
 Depuis l'écran d'accueil :
 
-1. Entrer l'URL affichée par Tailscale Serve dans CERVEAU DISTANT / MUE.
-2. Appuyer sur Tester et enregistrer.
-3. Choisir Agents LLM pour lancer une nouvelle partie distante sur MUE.
-4. Choisir Sans LLM pour continuer à jouer localement, sans réseau.
+1. Entrer l'URL **HTTPS** affichée par Tailscale Serve (par exemple
+   `https://mue.montailnet.ts.net`, sans `:8003`).
+2. Coller le contenu de `~/.config/the-last-dialogue/game-token` dans
+   **Clé API d'accès au jeu**. **Ne pas saisir la clé llama.cpp**.
+3. Appuyer sur Tester et enregistrer.
+4. Choisir Agents LLM pour lancer une partie distante utilisant MUE.
+5. Choisir Sans LLM pour continuer à jouer localement, sans réseau.
 
 L'adresse est mémorisée uniquement sur le téléphone, jamais dans Git.
+Le jeton de jeu est conservé **uniquement en mémoire dans l'interface Android** :
+il faut le ressaisir après fermeture de l'application ; aucun stockage
+persistant n'est activé pour les secrets.
 Les parties LLM envoient archives et choix à FastAPI sur MUE ; les parties
 scénarisées conservent leurs archives dans le stockage privé du téléphone.
 
@@ -84,12 +108,15 @@ scénarisées conservent leurs archives dans le stockage privé du téléphone.
 
 - L'APK accepte uniquement des URL HTTPS dont l'hôte se termine en .ts.net,
   et vérifie la signature de l'API du jeu. Tailscale doit être connecté.
-- L'APK ne contient aucune clé API ; le secret du routeur reste sur MUE.
+- L'APK n'embarque aucune clé API. Le champ de clé sert à authentifier
+  FastAPI (`THE_LAST_DIALOGUE_ACCESS_TOKEN`) et ne donne pas accès direct
+  à llama.cpp ; `OPENAI_API_KEY` reste sur MUE.
 - CORS_ORIGINS doit autoriser précisément
   https://appassets.androidplatform.net (origine de la WebView).
-- FastAPI n'a aucune authentification ni persistance dans cette V1 :
-  utiliser les ACL Tailscale pour restreindre les clients autorisés,
-  ne pas utiliser Funnel et ne pas exposer le port 8080 sur Internet.
+- FastAPI propose une clé API de jeu facultative (Bearer) mais n'a pas
+  de comptes ni de persistance. Configurer obligatoirement la clé pour
+  ce mode, et limiter les clients autorisés avec les ACL Tailscale.
+  Ne jamais utiliser Funnel ou exposer FastAPI sur Internet.
 - Le mode LLM génère actuellement des missions et des réactions narratives,
   pas des agents complètement autonomes. Les règles et votes sont calculés
   par le moteur déterministe.
@@ -100,3 +127,17 @@ scénarisées conservent leurs archives dans le stockage privé du téléphone.
   timeout par défaut de 120 secondes, configurable.
 - Le bon fonctionnement de l'inférence sur MUE doit être vérifié par
   un test réel du joueur, la CI ne pouvant pas joindre son tailnet privé.
+
+## Diagnostic
+
+- `http://mue.<tailnet>.ts.net:8003` pointe vers le routeur llama.cpp.
+  Il utilise HTTP et ne sert pas `/api/capabilities` : **ne pas
+  l'entrer dans le champ Android**.
+- Dans un terminal sur MUE : `tailscale serve status`. Vérifier que
+  le proxy HTTPS mène bien à `http://127.0.0.1:8080`.
+- Tester `https://mue.<tailnet>.ts.net/health` dans le navigateur Android
+  avec Tailscale actif. Ce chemin ne nécessite pas de jeton.
+- Le bouton **Tester et enregistrer** doit ensuite renvoyer le modèle
+  configuré, ou **Clé API du jeu absente ou incorrecte** (HTTP 401).
+- La configuration du jeton dans `THE_LAST_DIALOGUE_ACCESS_TOKEN` est
+  totalement indépendante de la clé du routeur MUE `OPENAI_API_KEY`.
