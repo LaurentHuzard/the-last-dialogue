@@ -173,7 +173,7 @@ export default function Home() {
                   setBackendMessage('');
                 }} />
             </label>
-            <label><span>Clé API d'accès au jeu (facultative si le backend n'en exige pas)</span>
+            <label><span>Clé API d&apos;accès au jeu (facultative si le backend n&apos;en exige pas)</span>
               <input type="password" autoComplete="off" spellCheck={false}
                 placeholder="Saisir une clé pour The Last Dialogue"
                 value={backendAccessToken}
@@ -182,9 +182,8 @@ export default function Home() {
                   setBackendMessage('');
                 }} />
             </label>
-            <p className="footnote">Cette clé authentifie l'API du jeu. Elle est distincte de la clé llama.cpp, qui reste sur MUE. Elle n'est pas sauvegardée : il faudra la ressaisir après fermeture de l'app.</p>
-            <p className="footnote">Le port 8003 est réservé au routeur llama.cpp. Utilise <code>tailscale serve --bg 8080</code> et saisis l'URL HTTPS indiquée par Tailscale.
-            </label>
+            <p className="footnote">Cette clé authentifie l&apos;API du jeu. Elle est distincte de la clé llama.cpp, qui reste sur MUE. Elle n&apos;est pas sauvegardée : il faudra la ressaisir après fermeture de l&apos;app.</p>
+            <p className="footnote">Le port 8003 est réservé au routeur llama.cpp. Utilise <code>tailscale serve --bg 8080</code> et saisis l&apos;URL HTTPS indiquée par Tailscale.</p>
             <div className="remote-buttons">
               <button type="button" className="secondary-action" disabled={checkingBackend || !backendInput.trim()} onClick={() => void connectMue()}>
                 {checkingBackend ? 'Test de connexion…' : 'Tester et enregistrer'}
