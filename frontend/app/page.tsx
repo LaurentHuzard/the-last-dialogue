@@ -156,7 +156,7 @@ export default function Home() {
           </div>
           {ANDROID_BUILD && <div className="panel remote-panel">
             <span className="eyebrow">CERVEAU DISTANT / MUE VIA TAILSCALE</span>
-            <p>Pour les agents LLM, démarre l’API The Last Dialogue sur MUE et expose-la uniquement à ton tailnet avec Tailscale Serve. Aucune clé API n'est enregistrée dans cette application.</p>
+            <p>Pour les agents LLM, démarre l’API The Last Dialogue sur MUE et expose-la uniquement à ton tailnet avec Tailscale Serve. Aucune clé API n&apos;est enregistrée dans cette application.</p>
             <label><span>Adresse HTTPS Tailscale Serve</span>
               <input type="url" autoComplete="url" spellCheck={false}
                 placeholder="https://mue.mon-tailnet.ts.net"
