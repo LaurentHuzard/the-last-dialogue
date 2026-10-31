@@ -1,62 +1,72 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeTailscaleBackend, verifyBackend } from '../lib/tailscale-backend.ts';
+import { normalizeTailscaleLlamaOrigin, listLlamaModels, preferredModel, llamaChat } from '../lib/tailscale-backend.ts';
 
-test('Tailscale Serve HTTPS origin is normalized', () => {
-  assert.equal(normalizeTailscaleBackend(' https://mue.example-tailnet.ts.net/ '), 'https://mue.example-tailnet.ts.net');
-  assert.equal(normalizeTailscaleBackend('https://mue.example-tailnet.ts.net:8443'), 'https://mue.example-tailnet.ts.net:8443');
+const BASE = 'https://mue.taile632c2.ts.net';
+
+test('only accepts a clean HTTPS Serve origin on ts.net', () => {
+  assert.equal(normalizeTailscaleLlamaOrigin(' ' + BASE + '/ '), BASE);
+  assert.equal(normalizeTailscaleLlamaOrigin(BASE + ':8443'), BASE + ':8443');
+  for (const url of ['', 'http://mue.taile632c2.ts.net', 'https://google.com',
+      'https://mue.taile632c2.ts.net.evil.com', BASE + '/v1', BASE + '?token=key',
+      'https://user:pass@mue.taile632c2.ts.net', 'javascript:alert(1)']) {
+    assert.throws(() => normalizeTailscaleLlamaOrigin(url));
+  }
 });
 
-test('public, cleartext, credentialed or path-masked origins are rejected', () => {
-  for (const input of ['', 'http://mue.example.ts.net', 'https://example.org',
-    'https://evilts.net', 'https://attacker.ts.net.evil.org',
-    'https://user:secret@mue.example.ts.net', 'https://mue.example.ts.net@evil.org',
-    'https://mue.example.ts.net/api', 'https://mue.example.ts.net/?token=secret',
-    'javascript:alert(1)']) assert.throws(() => normalizeTailscaleBackend(input));
-});
-
-test('reads backend identity and declared LLM model', async () => {
-  let received;
-  const result = await verifyBackend('https://mue.example.ts.net', async (url) => {
-    received = url;
-    return { ok: true, json: async () => ({
-      app: 'the-last-dialogue', llm_configured: true, model: 'qwen35-9b',
-    }) };
-  });
-  assert.equal(received, 'https://mue.example.ts.net/api/capabilities');
-  assert.equal(result.model, 'qwen35-9b');
-});
-
-test('rejects unrelated HTTPS services', async () => {
-  await assert.rejects(verifyBackend('https://mue.example.ts.net', async () => ({
-    ok: true, json: async () => ({
-      app: 'unrelated', llm_configured: true, model: 'other',
-    }),
-  })), /attendue/);
-});
-
-
-test('HTTP llama.cpp port gives actionable correction', () => {
+test('old HTTP :8003 address returns direct, actionable Serve instructions', () => {
   assert.throws(
-    () => normalizeTailscaleBackend('http://mue.example.ts.net:8003/'),
-    /port 8003.*llama\.cpp/,
+    () => normalizeTailscaleLlamaOrigin('http://mue.taile632c2.ts.net:8003/'),
+    /tailscale serve --bg 8003/,
   );
 });
-test('game token is sent as Bearer header and never in the URL', async () => {
-  let call;
-  await verifyBackend('https://mue.example.ts.net', async (url, init) => {
-    call = {url, init};
-    return {ok: true, json: async () => ({
-      app: 'the-last-dialogue', llm_configured: true, model: 'qwen35-9b',
-    })};
-  }, 'test-secret-token');
-  assert.equal(call.init.headers.Authorization, 'Bearer test-secret-token');
-  assert.equal(call.url, 'https://mue.example.ts.net/api/capabilities');
-  assert.ok(!call.url.includes('test-secret-token'));
+
+test('model discovery uses /v1/models and Bearer key', async () => {
+  let called = null;
+  const models = await listLlamaModels(BASE, 'local-key', async (url, init) => {
+    called = { url, init };
+    return { ok: true, json: async () => ({ data: [
+      { id: 'gemma4-32k' }, { id: 'qwen35-9b' }, { id: 'gemma4-32k' },
+    ] }) };
+  });
+  assert.deepEqual(models, ['gemma4-32k', 'qwen35-9b']);
+  assert.equal(called.url, BASE + '/v1/models');
+  assert.equal(called.init.headers.Authorization, 'Bearer local-key');
+  assert.ok(!called.url.includes('local-key'));
+  assert.equal(preferredModel(models), 'gemma4-32k');
+  assert.equal(preferredModel(models, 'qwen35-9b'), 'qwen35-9b');
 });
-test('401 explains an invalid game key', async () => {
-  await assert.rejects(verifyBackend('https://mue.example.ts.net', async () => ({status: 401, ok: false}), 'bad'), /Clé d'accès/);
+
+test('missing key rejects with a useful message, never echoes secret', async () => {
+  await assert.rejects(listLlamaModels(BASE, 'sensitive-secret', async () => ({
+    status: 401, ok: false,
+  })), error => /Clé API llama.cpp/.test(error.message) && !error.message.includes('sensitive-secret'));
 });
-test('404 explains the 8003 inference versus 8080 game backend mismatch', async () => {
-  await assert.rejects(verifyBackend('https://mue.example.ts.net', async () => ({status: 404, ok: false})), /port 8080/);
+
+test('wrong backend is correctly identified', async () => {
+  await assert.rejects(listLlamaModels(BASE, '', async () => ({ status: 404, ok: false })), /port 8003/);
+});
+
+test('chat completions send non-streaming OpenAI format with no intermediary', async () => {
+  let called;
+  const text = await llamaChat({ origin: BASE, apiKey: 'local-secret', model: 'qwen35-9b' }, [
+    { role: 'system', content: 'Tu es Sélène.' },
+    { role: 'user', content: 'Propose une mission.' },
+  ], async (url, init) => {
+    called = { url, init };
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'Une enquête sur les pollinisateurs.' } }] }) };
+  });
+  assert.equal(text, 'Une enquête sur les pollinisateurs.');
+  assert.equal(called.url, BASE + '/v1/chat/completions');
+  assert.equal(called.init.headers.Authorization, 'Bearer local-secret');
+  const body = JSON.parse(called.init.body);
+  assert.equal(body.model, 'qwen35-9b');
+  assert.equal(body.stream, false);
+  assert.ok(!called.url.includes('local-secret'));
+});
+
+test('empty content never masquerades as a generated agent message', async () => {
+  await assert.rejects(llamaChat({ origin: BASE, apiKey: '', model: 'gemma4-32k' }, [
+    { role: 'system', content: 'Bonjour' },
+  ], async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: '' } }] }) })), /pas produit de texte/);
 });
