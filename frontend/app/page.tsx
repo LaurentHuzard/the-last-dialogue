@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { clearOfflineSession, offlineRequest, resumeOfflineSession } from '../lib/offline-game';
+import { BACKEND_STORAGE_KEY, normalizeTailscaleBackend, verifyBackend } from '../lib/tailscale-backend';
 
 type Mode = 'scripted' | 'llm';
 type Proposal = 'sanctuary' | 'compromise' | 'construction';
@@ -42,11 +43,13 @@ const DELEGATES = [
   { id: 'ada', name: 'Ada', role: 'Archives', symbol: '⌘' },
 ];
 
-async function request<T>(url: string, data?: unknown): Promise<T> {
-  if (ANDROID_BUILD && !API) {
+async function request<T>(url: string, data?: unknown, androidRemoteUrl = ''): Promise<T> {
+  // A scripted Android game always runs locally, regardless of MUE settings.
+  const base = ANDROID_BUILD ? androidRemoteUrl : API;
+  if (ANDROID_BUILD && !base) {
     return offlineRequest(url, data, window.localStorage) as T;
   }
-  const res = await fetch(`${API}${url}`, {
+  const res = await fetch(`${base}${url}`, {
     method: data === undefined ? 'GET' : 'POST',
     headers: { 'Content-Type': 'application/json' },
     ...(data === undefined ? {} : { body: JSON.stringify(data) }),
@@ -68,9 +71,16 @@ export default function Home() {
   const [proposal, setProposal] = useState<Proposal>('compromise');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const [backendInput, setBackendInput] = useState('');
+  const [backendUrl, setBackendUrl] = useState('');
+  const [sessionBackend, setSessionBackend] = useState('');
+  const [backendMessage, setBackendMessage] = useState('');
+  const [checkingBackend, setCheckingBackend] = useState(false);
 
   useEffect(() => {
-    if (ANDROID_BUILD && !API) {
+    if (ANDROID_BUILD) {
+      const savedUrl = window.localStorage.getItem(BACKEND_STORAGE_KEY);
+      if (savedUrl) { setBackendUrl(savedUrl); setBackendInput(savedUrl); }
       const saved = resumeOfflineSession(window.localStorage);
       if (saved) queueMicrotask(() => setSession(saved as Session));
     }
@@ -87,6 +97,41 @@ export default function Home() {
     } finally {
       setPending(false);
     }
+  }
+
+  async function connectMue() {
+    setCheckingBackend(true);
+    setBackendMessage('Vérification de la connexion Tailscale…');
+    try {
+      const normalized = normalizeTailscaleBackend(backendInput);
+      const capabilities = await verifyBackend(normalized);
+      setBackendInput(normalized);
+      setBackendUrl(normalized);
+      window.localStorage.setItem(BACKEND_STORAGE_KEY, normalized);
+      setBackendMessage(capabilities.llm_configured
+        ? 'Backend connecté. Modèle déclaré : ' + capabilities.model + ' (inférence non encore testée).'
+        : 'Backend connecté, mais la clé du routeur MUE manque dans FastAPI.');
+    } catch (reason) {
+      setBackendMessage('Connexion impossible : ' + (reason instanceof Error ? reason.message : 'erreur réseau. Vérifie Tailscale.'));
+    } finally {
+      setCheckingBackend(false);
+    }
+  }
+
+  function disconnectMue() {
+    window.localStorage.removeItem(BACKEND_STORAGE_KEY);
+    setBackendUrl('');
+    setBackendInput('');
+    setBackendMessage('Connexion MUE effacée. Le mode hors ligne reste disponible.');
+  }
+
+  function startGame() {
+    const remote = ANDROID_BUILD && mode === 'llm' ? backendUrl : '';
+    void act(async () => {
+      const started = await request<Session>('/api/sessions', { mode }, remote);
+      setSessionBackend(remote);
+      return started;
+    });
   }
 
   return (
@@ -106,11 +151,28 @@ export default function Home() {
               <span className="mode-mark">◌</span><strong>Sans LLM</strong><small>Partie scénarisée, sans clé API et sans génération de contenu.</small>
             </button>
             <button type="button" className={`mode-card ${mode === 'llm' ? 'selected' : ''}`} onClick={() => setMode('llm')} aria-pressed={mode === 'llm'}>
-              <span className="mode-mark">✳</span><strong>Agents LLM</strong><small>{ANDROID_BUILD && !API ? 'Mode disponible avec un serveur distant configuré. Cette APK fonctionne en mode scénarisé autonome.' : 'Sélène propose une mission ; Ada et Ivo réagissent aux archives et négociations. Requiert une clé OpenAI côté serveur.'}</small>
+              <span className="mode-mark">✳</span><strong>Agents LLM</strong><small>{ANDROID_BUILD ? (backendUrl ? 'Mode distant : les agents utilisent le backend MUE sur ton tailnet.' : 'Configure MUE via Tailscale ci-dessous. Sans serveur, le mode scénarisé prend le relais.') : 'Sélène propose une mission ; Ada et Ivo réagissent aux archives et négociations. Requiert un backend LLM configuré.'}</small>
             </button>
           </div>
-          <button className="primary-action" disabled={pending} onClick={() => act(() => request<Session>('/api/sessions', { mode }))}>{pending ? 'Ouverture de la séance…' : 'Entrer dans l’Assemblée →'}</button>
-          <p className="footnote">{ANDROID_BUILD && !API ? 'Application Android autonome : jouable sans réseau, sans LLM. Les archives sont conservées sur cet appareil jusqu’à la suppression des données de l’app. Les recherches externes ouvrent ton navigateur.' : 'Prototype local : sessions temporaires, aucune information envoyée à un service externe en mode sans LLM.'}</p>
+          {ANDROID_BUILD && <div className="panel remote-panel">
+            <span className="eyebrow">CERVEAU DISTANT / MUE VIA TAILSCALE</span>
+            <p>Pour les agents LLM, démarre l’API The Last Dialogue sur MUE et expose-la uniquement à ton tailnet avec Tailscale Serve. Aucune clé API n'est enregistrée dans cette application.</p>
+            <label><span>Adresse HTTPS Tailscale Serve</span>
+              <input type="url" autoComplete="url" spellCheck={false}
+                placeholder="https://mue.mon-tailnet.ts.net"
+                value={backendInput} onChange={event => setBackendInput(event.target.value)} />
+            </label>
+            <div className="remote-buttons">
+              <button type="button" className="secondary-action" disabled={checkingBackend || !backendInput.trim()} onClick={() => void connectMue()}>
+                {checkingBackend ? 'Test de connexion…' : 'Tester et enregistrer'}
+              </button>
+              {backendUrl && <button type="button" className="text-action" onClick={disconnectMue}>Déconnecter MUE</button>}
+            </div>
+            {backendMessage && <p role="status" className="notice">{backendMessage}</p>}
+            <p className="footnote">L’URL reste sur ton appareil. MUE doit être joignable via Tailscale ; le mode sans LLM reste entièrement hors ligne.</p>
+          </div>}
+          <button className="primary-action" disabled={pending} onClick={startGame}>{pending ? 'Ouverture de la séance…' : 'Entrer dans l’Assemblée →'}</button>
+          <p className="footnote">{ANDROID_BUILD ? 'Mode scénarisé local : fonctionne sans réseau. En mode LLM, les archives et décisions passent par le backend MUE via Tailscale. Les recherches externes s’ouvrent dans le navigateur.' : 'Prototype local : sessions temporaires, aucune information envoyée à un service externe en mode sans LLM.'}</p>
         </section>
       ) : (
         <div className="game-layout">
@@ -140,12 +202,12 @@ export default function Home() {
               <div className="panel-header"><span className="eyebrow">MISSION PROPOSÉE PAR SÉLÈNE</span><span className="tag">2026</span></div>
               <h3>{session.mission.title}</h3><p>{session.mission.request}</p>
               <div className="source-links"><a href="https://openalex.org/" target={ANDROID_BUILD ? '_self' : '_blank'} rel="noopener noreferrer">Explorer OpenAlex ↗</a><a href="https://inpn.mnhn.fr/" target={ANDROID_BUILD ? '_self' : '_blank'} rel="noopener noreferrer">Explorer l&apos;INPN ↗</a></div>
-              <form onSubmit={(event) => { event.preventDefault(); void act(() => request<Session>(`/api/sessions/${session.id}/archives`, { kind, title, description, source_url: sourceUrl || null })).then(() => { setTitle(''); setDescription(''); setSourceUrl(''); }); }}>
+              <form onSubmit={(event) => { event.preventDefault(); void act(() => request<Session>(`/api/sessions/${session.id}/archives`, { kind, title, description, source_url: sourceUrl || null }, sessionBackend)).then(() => { setTitle(''); setDescription(''); setSourceUrl(''); }); }}>
                 <div className="field-row"><label><span>Nature de l&apos;archive</span><select value={kind} onChange={event => setKind(event.target.value as 'publication' | 'observation')}><option value="publication">Publication / document</option><option value="observation">Observation personnelle</option></select></label><label><span>Intitulé</span><input required maxLength={120} minLength={5} value={title} onChange={event => setTitle(event.target.value)} placeholder="Titre de la découverte" /></label></div>
                 <label><span>Source web {kind === 'publication' ? '(requise)' : '(facultative)'}</span><input required={kind === 'publication'} type="url" value={sourceUrl} onChange={event => setSourceUrl(event.target.value)} placeholder="https://…" /></label>
                 <label><span>Ce que tu as réellement trouvé ou observé</span><textarea required minLength={25} maxLength={1500} rows={3} value={description} onChange={event => setDescription(event.target.value)} placeholder="Décris l'observation ou résume les résultats. Une source déclarée n'est pas une preuve validée." /></label>
                 <button className="secondary-action" disabled={pending || session.archives.length >= 12} type="submit">{pending ? 'Transmission…' : 'Ajouter aux archives →'}</button>
-                <p className="footnote">Ne partage pas de localisation précise, de données personnelles ou de photos privées. {ANDROID_BUILD && !API ? 'Les archives restent dans le stockage privé de cette application.' : 'Les données restent dans la session côté serveur (temporairement).'}</p>
+                <p className="footnote">Ne partage pas de localisation précise, de données personnelles ou de photos privées. {ANDROID_BUILD && !sessionBackend ? 'Les archives restent dans le stockage privé de cette application.' : 'Les données restent dans la session côté serveur (temporairement).'}</p>
               </form>
             </div>}
 
@@ -154,8 +216,8 @@ export default function Home() {
 
           <aside className="side-column">
             <div className="panel delegates-panel"><span className="eyebrow">LE CONSEIL</span><div className="delegate-list">{DELEGATES.map(d => <div className="delegate" key={d.id}><span className="avatar">{d.symbol}</span><div><strong>{d.name}</strong><small>{d.role}</small></div><span className="position">{(session.positions[d.id] || 0) > 0 ? '+' : ''}{session.positions[d.id] || 0}</span></div>)}</div><p className="footnote">Position indicative dans ce conflit, pas un jugement moral.</p></div>
-            <div className="panel decision-panel"><span className="eyebrow">ORDRE DU JOUR · VOTE FINAL</span><h3>Le corridor énergétique</h3><p>Dépose tes preuves, échange des concessions et soumets une proposition au Conseil.</p><div className="proposal-list">{PROPOSALS.map(p => <label className={`proposal ${proposal === p.id ? 'selected' : ''}`} key={p.id}><input type="radio" name="proposal" value={p.id} checked={proposal === p.id} onChange={() => setProposal(p.id)} disabled={session.phase === 'finished'} /><span><strong>{p.title}</strong><small>{p.description}</small></span></label>)}</div><button className="secondary-action" disabled={pending || session.phase === 'finished' || session.day >= 7} onClick={() => act(() => request<Session>(`/api/sessions/${session.id}/proposals`, { proposal }))}>Négocier cette proposition</button><button className="primary-action" disabled={pending || session.phase === 'finished'} onClick={() => act(() => request<Session>(`/api/sessions/${session.id}/vote`, { proposal }))}>Soumettre au vote →</button><p className="footnote">Le vote est définitif. 3 voix sur 4 sont nécessaires. Les règles sont identiques avec ou sans LLM.</p></div>
-            <div className="panel session-panel"><span className="eyebrow">SESSION</span><p>{session.effective_mode === 'llm' ? 'Agents LLM actifs' : 'Mode scénarisé'}</p><button className="text-action" onClick={() => { if (ANDROID_BUILD && !API) clearOfflineSession(window.localStorage); setSession(null); setError(''); }}>Nouvelle partie ↗</button></div>
+            <div className="panel decision-panel"><span className="eyebrow">ORDRE DU JOUR · VOTE FINAL</span><h3>Le corridor énergétique</h3><p>Dépose tes preuves, échange des concessions et soumets une proposition au Conseil.</p><div className="proposal-list">{PROPOSALS.map(p => <label className={`proposal ${proposal === p.id ? 'selected' : ''}`} key={p.id}><input type="radio" name="proposal" value={p.id} checked={proposal === p.id} onChange={() => setProposal(p.id)} disabled={session.phase === 'finished'} /><span><strong>{p.title}</strong><small>{p.description}</small></span></label>)}</div><button className="secondary-action" disabled={pending || session.phase === 'finished' || session.day >= 7} onClick={() => act(() => request<Session>(`/api/sessions/${session.id}/proposals`, { proposal }, sessionBackend))}>Négocier cette proposition</button><button className="primary-action" disabled={pending || session.phase === 'finished'} onClick={() => act(() => request<Session>(`/api/sessions/${session.id}/vote`, { proposal }, sessionBackend))}>Soumettre au vote →</button><p className="footnote">Le vote est définitif. 3 voix sur 4 sont nécessaires. Les règles sont identiques avec ou sans LLM.</p></div>
+            <div className="panel session-panel"><span className="eyebrow">SESSION</span><p>{session.effective_mode === 'llm' ? 'Agents LLM configurés sur MUE' : 'Mode scénarisé'}{sessionBackend ? ' · réseau Tailscale' : ' · local'}</p><button className="text-action" onClick={() => { if (ANDROID_BUILD && !sessionBackend) clearOfflineSession(window.localStorage); setSessionBackend(''); setSession(null); setError(''); }}>Nouvelle partie ↗</button></div>
           </aside>
         </div>
       )}
