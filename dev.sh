@@ -1,33 +1,16 @@
-#!/bin/bash
-
-# Kill background processes on exit
-trap 'kill $(jobs -p)' EXIT
-
-echo "Starting The Last Dialogue locally..."
-
-# Start Backend
-echo "Starting Backend on port 8000..."
+#!/usr/bin/env bash
+set -euo pipefail
+trap 'kill $(jobs -p) 2>/dev/null || true' EXIT
 (
     cd backend
-    if [ ! -d "venv" ]; then
-        echo "Creating venv..."
-        python3 -m venv venv
-    fi
+    if [ ! -d venv ]; then python3 -m venv venv; fi
     source venv/bin/activate
     pip install -r requirements.txt
-    uvicorn server:app --reload --host 0.0.0.0 --port 8000
+    uvicorn server:app --reload --host 0.0.0.0 --port 8080
 ) &
-BACKEND_PID=$!
-
-# Start Frontend
-echo "Starting Frontend on port 3000..."
 (
     cd frontend
-    if [ ! -d "node_modules" ]; then
-        npm install
-    fi
-    npm run dev
+    if [ ! -d node_modules ]; then npm ci; fi
+    NEXT_PUBLIC_API_URL=http://localhost:8080 npm run dev
 ) &
-FRONTEND_PID=$!
-
-wait $BACKEND_PID $FRONTEND_PID
+wait
