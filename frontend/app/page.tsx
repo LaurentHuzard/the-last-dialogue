@@ -5,7 +5,7 @@ import { clearOfflineSession, resumeOfflineSession, type Session } from '../lib/
 import { androidGameRequest, talkToDelegate, type DelegateId } from '../lib/agent-game';
 import {
   MUE_ORIGIN_STORAGE_KEY, normalizeTailscaleLlamaOrigin, listLlamaModels,
-  preferredModel, type LlamaConnection,
+  preferredModel, llamaChat, type LlamaConnection,
 } from '../lib/tailscale-backend';
 
 type Mode = 'scripted' | 'llm';
@@ -61,6 +61,8 @@ export default function Home() {
   const [activeConnection, setActiveConnection] = useState<LlamaConnection | null>(null);
   const [connectionMessage, setConnectionMessage] = useState('');
   const [checkingMue, setCheckingMue] = useState(false);
+  const [testingGeneration, setTestingGeneration] = useState(false);
+  const [generationMessage, setGenerationMessage] = useState('');
   const [speaker, setSpeaker] = useState<DelegateId>('selene');
   const [question, setQuestion] = useState('');
 
@@ -98,13 +100,15 @@ export default function Home() {
       setMueModels(models);
       setMueModel(selected);
       window.localStorage.setItem(MUE_ORIGIN_STORAGE_KEY, normalized);
-      setConnectionMessage('llama-server connecté : ' + models.length +
-        ' modèle(s) disponible(s), dont ' + selected + '.');
+      setConnectionMessage('API /v1/models accessible : ' + models.length +
+        ' modèle(s), dont ' + selected + '. Lance un test de génération pour vérifier le modèle.');
+      setGenerationMessage('');
     } catch (reason) {
       setMueOrigin('');
       setMueModels([]);
       setMueModel('');
       setConnectionMessage(reason instanceof Error ? reason.message : 'Connexion impossible : vérifie Tailscale.');
+      setGenerationMessage('');
     } finally {
       setCheckingMue(false);
     }
@@ -119,6 +123,28 @@ export default function Home() {
     setMueKey('');
     setActiveConnection(null);
     setConnectionMessage('MUE déconnecté. Le mode scénarisé reste disponible hors ligne.');
+    setGenerationMessage('');
+  }
+
+  async function testGeneration() {
+    if (!mueOrigin || !mueModel || checkingMue || testingGeneration) return;
+    setTestingGeneration(true);
+    setGenerationMessage('Test d’une vraie génération sur MUE en cours…');
+    try {
+      const result = await llamaChat(
+        { origin: mueOrigin, apiKey: mueKey, model: mueModel },
+        [
+          { role: 'system', content: 'Tu es un délégué de test. Réponds brièvement en français.' },
+          { role: 'user', content: 'Dis en une phrase que la liaison avec l’Assemblée fonctionne.' },
+        ],
+      );
+      setGenerationMessage('Génération réussie sur ' + mueModel + ' : ' + result.slice(0, 200));
+    } catch (reason) {
+      setGenerationMessage('Échec de génération : ' +
+        (reason instanceof Error ? reason.message : 'Erreur inconnue.'));
+    } finally {
+      setTestingGeneration(false);
+    }
   }
 
   function startGame() {
@@ -175,6 +201,7 @@ export default function Home() {
                   setMueOrigin('');
                   setMueModels([]);
                   setConnectionMessage('');
+                  setGenerationMessage('');
                 }} />
             </label>
             <label><span>Clé API llama.cpp (si le routeur en exige une)</span>
@@ -186,6 +213,7 @@ export default function Home() {
                   setMueOrigin('');
                   setMueModels([]);
                   setConnectionMessage('');
+                  setGenerationMessage('');
                 }} />
             </label>
             <p className="footnote">La clé reste en mémoire et n&apos;est ni enregistrée dans les archives ni intégrée à l&apos;APK. Ne la saisis que sur un appareil de confiance.</p>
@@ -196,12 +224,17 @@ export default function Home() {
               {mueOrigin && <button type="button" className="text-action" onClick={disconnectMue}>Déconnecter MUE</button>}
             </div>
             {mueModels.length > 0 && <label><span>Modèle pour les délégués</span>
-              <select value={mueModel} onChange={event => setMueModel(event.target.value)}>
+              <select value={mueModel} onChange={event => { setMueModel(event.target.value); setGenerationMessage(''); }}>
                 {mueModels.map(id => <option value={id} key={id}>{id}</option>)}
               </select>
             </label>}
+            {mueOrigin && mueModel && <button type="button" className="secondary-action"
+              disabled={testingGeneration || checkingMue} onClick={() => void testGeneration()}>
+              {testingGeneration ? 'Test de génération…' : 'Tester une vraie génération LLM'}
+            </button>}
             {connectionMessage && <p role="status" className="notice">{connectionMessage}</p>}
-            <p className="footnote">Sur MUE, vérifie d&apos;abord <code>tailscale serve status</code>, puis expose le routeur local avec <code>tailscale serve --bg 8003</code> si nécessaire. Utilise l&apos;URL HTTPS affichée, sans :8003 et sans /v1.</p>
+            {generationMessage && <p role="status" className="notice">{generationMessage}</p>}
+            <p className="footnote">Sur MUE, vérifie d&apos;abord <code>tailscale serve status</code>. Si le port HTTPS 443 est libre, utilise <code>tailscale serve --bg 8003</code> ; sinon, un port distinct comme <code>tailscale serve --bg --https=8443 8003</code>. Utilise l&apos;URL HTTPS affichée, sans :8003 et sans /v1.</p>
           </div>}
           <button className="primary-action" disabled={pending} onClick={startGame}>{pending ? 'Ouverture de la séance…' : 'Entrer dans l’Assemblée →'}</button>
           <p className="footnote">{ANDROID_BUILD ? 'Règles, votes et archives restent sur Android. En mode Agents LLM, seules les instructions et données nécessaires aux dialogues partent vers MUE sur ton tailnet.' : 'Prototype web : la session est traitée par le backend FastAPI.'}</p>

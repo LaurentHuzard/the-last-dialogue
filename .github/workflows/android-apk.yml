@@ -92,8 +92,9 @@ jobs:
             const body = `${tag}\n### 📱 APK Android de la PR\n\n` +
               `**[Télécharger la build debug](${url})** (GitHub Actions, connexion GitHub requise).\n\n` +
               `Cette APK inclut un **mode scénarisé réellement jouable hors ligne**, avec ses archives enregistrées sur le téléphone. ` +
-              `Le mode LLM exige un backend distant et revient au mode sans LLM pour cette build autonome. ` +
+              `Le mode LLM appelle directement llama-server sur MUE via HTTPS Tailscale Serve : URL, clé API et modèle sont configurés sur Android. Aucun FastAPI n'est nécessaire sur Android. ` +
               `Signature **debug temporaire** : désinstalle l'APK précédente si Android refuse la mise à jour. ` +
+              `Guide MUE : https://github.com/${owner}/${repo}/blob/${context.payload.pull_request.head.ref}/docs/mue-tailscale.md. ` +
               `Aucun merge nécessaire.\n\nCommit : \`${context.sha.slice(0, 12)}\`.`;
             const issue_number = context.issue.number;
             const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });

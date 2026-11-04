@@ -1,4 +1,4 @@
-# Android v0.2.0 : jeu hors ligne + agents sur MUE
+# Android v0.2.1 : jeu hors ligne + agents sur MUE
 
 L'application est une WebView Android emballant le frontend Next.js exporté
 en fichiers statiques. Les règles et les archives résident localement dans
@@ -21,7 +21,7 @@ parties sauvegardées localement.
 - **Sans LLM** : entièrement local, sans connexion, sans requête réseau
   générée par le jeu. Missions prédéfinies et règles déterministes.
 - **Agents LLM** : URL Tailscale HTTPS + clé API llama.cpp en mémoire +
-  alias de modèle choisi dans la liste \`/v1/models\`. Sélène propose
+  alias de modèle choisi dans la liste \`/v1/models\`. L'interface propose aussi un test de génération `/v1/chat/completions` avant de lancer la partie. Sélène propose
   une mission, Ada réagit à une archive, Ivo réagit à une négociation,
   et le joueur peut envoyer une question libre à l'un des trois.
 - Les personnages n'ont pas accès aux outils de MUE, n'effectuent

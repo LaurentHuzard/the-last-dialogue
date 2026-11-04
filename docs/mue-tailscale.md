@@ -1,4 +1,4 @@
-# Android → MUE directement : llama-server avec Tailscale (v0.2.0)
+# Android → MUE directement : llama-server avec Tailscale (v0.2.1)
 
 **Architecture choisie : B.** L'application Android contient le moteur de jeu
 déterministe et les règles de négociation. Les délégués LLM (Sélène, Ada et
@@ -98,13 +98,15 @@ La configuration CORS ne remplace pas la clé d'API ni les ACL Tailscale.
 
 ## 4. Dans la nouvelle APK
 
-1. Installer The Last Dialogue **v0.2.0-direct-mue**.
+1. Installer The Last Dialogue **v0.2.1-direct-mue**.
 2. Activer Tailscale sur Android, connecté au même tailnet.
 3. Renseigner l'adresse **HTTPS Serve** du routeur, par exemple
    \`https://mue.ton-tailnet.ts.net\`, **sans \`:8003\` ni \`/v1\`**.
 4. Coller la clé issue de \`~/.config/mue/llama-api-key\` dans le champ
    **Clé API llama.cpp** (masqué et non persistant).
-5. Appuyer sur **Tester /v1/models**, puis choisir le modèle dans la liste.
+5. Appuyer sur **Tester /v1/models**, choisir le modèle dans la liste,
+   puis utiliser **Tester une vraie génération LLM** pour vérifier
+   `/v1/chat/completions` (la liste des modèles seule ne garantit pas l'inférence).
 6. Sélectionner **Agents LLM** pour demander une mission à Sélène et
    dialoguer avec Sélène, Ivo et Ada ; ou **Sans LLM** pour une partie
    totalement hors ligne.
