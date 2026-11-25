@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { askCouncilDelegate, readCouncilChat, runCouncilDialogue, councilLines } from '../lib/council-dialogue.ts';
 import { IDBFactory } from 'fake-indexeddb';
 import { durableCouncil } from '../lib/durable-council.ts';
 import { COUNCIL_KEY, applyCouncil, startCouncil, loadCouncil, recoverCouncil } from '../lib/council.ts';
@@ -54,4 +55,31 @@ test('unreadable legacy bytes survive an explicit recovery', async () => {
   const fresh = await commit(store => recoverCouncil(store, 'scripted'));
   assert.ok([...values].some(([k,v]) => k.startsWith('tld-council-recovery-') && v === '{illisible'));
   assert.deepEqual(await commit(loadCouncil, true), fresh);
+});
+
+test('a restart during generation preserves the question slot and the previous completed voice', async () => {
+  const { values, mirror, commit } = setup();
+  const session = await commit(store => startCouncil(store, 'llm'));
+  const connection = { origin: 'https://mue.example.ts.net', model: 'fixture', apiKey: '' };
+  const checkpoint = () => commit(loadCouncil);
+  for (const stage of ['opening', 'question']) {
+    let started, release;
+    const dispatched = new Promise(resolve => { started = resolve; });
+    const wait = new Promise(resolve => { release = resolve; });
+    let calls = 0;
+    const fetcher = async () => {
+      if (++calls === (stage === 'opening' ? 2 : 1)) { started(); await wait; }
+      return Response.json({ choices: [{ message: { content: '{"line":"Une pièce demeure dans la marge."}' } }] });
+    };
+    const pending = stage === 'opening'
+      ? runCouncilDialogue(session, 'opening', mirror, connection, undefined, fetcher, checkpoint)
+      : askCouncilDelegate(session, 'ada', 'Que manque-t-il au dossier ?', mirror, connection, undefined, fetcher, checkpoint);
+    await dispatched;
+    values.delete('tld-council-prose-v1');
+    assert.deepEqual(await commit(loadCouncil, true), session);
+    assert.equal(councilLines(session, 'opening', mirror)[0].status, 'generated');
+    if (stage === 'question') assert.equal(readCouncilChat(session, mirror)[0].question, 'Que manque-t-il au dossier ?');
+    release();
+    await pending;
+  }
 });

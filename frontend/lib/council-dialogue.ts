@@ -135,6 +135,7 @@ async function renderLine(
 export async function runCouncilDialogue(
   session: Council, scene: Scene, store: SessionStorage, connection: LlamaConnection | null,
   signal?: AbortSignal, fetcher: LlamaFetch = fetch,
+  checkpoint?: () => Promise<void>,
 ): Promise<void> {
   if (session.mode !== 'llm' || !current(session, store)) return;
   if (!((scene === 'opening' && session.phase === 'investigation') || (scene === 'return' && session.phase === 'motion'))) return;
@@ -146,6 +147,7 @@ export async function runCouncilDialogue(
   const turns = lines.map(() => mark(connection ? 'interrupted' : 'offline'));
   record[scene] = turns;
   write(record, store);
+  if (checkpoint) await checkpoint();
   if (!connection) return;
   const deadline = Date.now() + MUE_LIMITS.sceneMs;
   for (let i = 0; i < turns.length; i++) {
@@ -161,12 +163,14 @@ export async function runCouncilDialogue(
     if (!current(session, store)) return;
     turns[i] = d;
     save(d);
+    if (checkpoint) await checkpoint();
   }
 }
 
 export async function askCouncilDelegate(
   session: Council, delegate: DelegateId, question: string, store: SessionStorage,
   connection: LlamaConnection, signal?: AbortSignal, fetcher: LlamaFetch = fetch,
+  checkpoint?: () => Promise<void>,
 ): Promise<void> {
   if (session.mode !== 'llm' || !connection || !current(session, store)) throw new Error('Séance ou connexion indisponible.');
   const prompt = typeof question === 'string' ? question.trim() : '';
@@ -179,6 +183,8 @@ export async function askCouncilDelegate(
   const entry = { ...mark('interrupted'), speaker: delegate, question: prompt };
   record.chat.push(entry);
   write(record, store);
+  if (checkpoint) await checkpoint();
+  if (!current(session, store)) return;
   const save = (d: Delivery) => {
     const fresh = read(session.id, store);
     fresh.chat[index] = { ...entry, ...d };
@@ -186,5 +192,8 @@ export async function askCouncilDelegate(
   };
   const d = await renderLine(delegate, { memory: memories(session), question: prompt }, connection, signal,
     MUE_LIMITS.callMs, fetcher, () => save({ ...entry, calls: 1 }));
-  if (current(session, store)) save(d);
+  if (current(session, store)) {
+    save(d);
+    if (checkpoint) await checkpoint();
+  }
 }

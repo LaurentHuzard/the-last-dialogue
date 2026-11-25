@@ -189,8 +189,7 @@ export default function CouncilGame() {
       });
       setDamaged(false); setSession(next); setNewGame(false); setQuestion('');
       setTransmitting(next.mode === 'llm' && connection !== null);
-      await runCouncilDialogue(next, 'opening', store, connection, signal);
-      if (next.mode === 'llm') await confirmVoices(next, store);
+      await runCouncilDialogue(next, 'opening', store, connection, signal, fetch, () => confirmVoices(next, store));
     });
   }
   function act(action: Action) {
@@ -200,8 +199,7 @@ export default function CouncilGame() {
       setSession(next);
       if (action.type === 'deposit' && next.mode === 'llm') {
         setTransmitting(connection !== null);
-        await runCouncilDialogue(next, 'return', storyStore, connection, signal);
-        await confirmVoices(next, storyStore);
+        await runCouncilDialogue(next, 'return', storyStore, connection, signal, fetch, () => confirmVoices(next, storyStore));
       }
     });
   }
@@ -210,8 +208,7 @@ export default function CouncilGame() {
     if (!session || !connection) return;
     void perform(async signal => {
       setTransmitting(true);
-      await askCouncilDelegate(session, delegate, question, storyStore, connection, signal);
-      await confirmVoices(session, storyStore);
+      await askCouncilDelegate(session, delegate, question, storyStore, connection, signal, fetch, () => confirmVoices(session, storyStore));
       if (!signal.aborted) setQuestion('');
     });
   }
