@@ -1,56 +1,52 @@
-# The Last Dialogue · Les Archives du Présent
+# The Last Dialogue · Les Échos du Vivant
 
-An experimental negotiation game set across two times: **real research in 2026** becomes **debated archives in fictional 2235**. You play a human delegate negotiating the future of an ancient forest with three other delegates. The first vertical slice includes an entirely offline-inference/scripted mode and an optional LLM-assisted mode.
+En 2235, le courant manque au dispensaire. Pour l’y amener, un corridor doit traverser une forêt ancienne. Sélène et Ivo s’interpellent. Ada te confie le dossier. À toi de rapporter une pièce de 2026 ou d’ouvrir le carnet fictif disponible sur l’appareil, puis de défendre un tracé devant quatre votants.
 
-> **Prototype, not production-ready:** The optional web/FastAPI backend stores sessions in memory and has no user accounts (it supports a shared Bearer key, which is not a substitute for account authorization). Android stores its sessions locally. Submitted archives are not scientifically verified. Do not expose the backend or router publicly or enter private data.
+## Jouer
 
-## Start locally
+| Entrée | Règles et sauvegarde | Voix générées, facultatives |
+| --- | --- | --- |
+| APK Android, écran d’accueil | Campagne solo TypeScript embarquée. Dossier et procès-verbal en stockage privé WebView. Hors ligne dès l’installation. | Android contacte directement llama.cpp sur MUE via HTTPS Tailscale Serve. Clé en mémoire. |
+| Navigateur, `/assemblee/` | Même campagne et même moteur. Stockage local lié à l’origine du site. | Même connecteur, si cette origine est admise par le routeur privé. |
+| Navigateur, `/` | Prototype V1 indépendant. FastAPI conserve les sessions dans la mémoire de son processus. | Narrateur Python facultatif. Le mode scénarisé fonctionne sans clé. |
 
-Requirements: Python 3.11+, Node.js 20+, npm.
+Pour jouer immédiatement sur une machine de développement (Node 22+) :
 
-```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn server:app --host 0.0.0.0 --port 8080 --reload
-```
-
-In another terminal:
-
-```bash
+~~~sh
 cd frontend
 npm ci
-NEXT_PUBLIC_API_URL=http://localhost:8080 npm run dev
-```
+npm run dev
+~~~
 
-Open http://localhost:3000 and select a game mode.
+Ouvrir [la première Assemblée](http://localhost:3000/assemblee/). Pour le prototype V1, démarrer également FastAPI dans un autre terminal.
 
-### Optional LLM mode
-
-Set `OPENAI_API_KEY` **on the backend only** to enable Sélène's dynamically generated research mission and Ada's comments. `THE_LAST_DIALOGUE_MODEL` defaults to `gpt-4o-mini`. Without a key, selecting LLM mode explicitly falls back to scripted mode with a visible warning. Never put the key in a `NEXT_PUBLIC_` variable.
-
-### Docker Compose
-
-```bash
-docker compose up --build
-```
-
-For Docker deployments use backend-only API keys via an environment file or a secret store, and set `CORS_ORIGINS` to the allowed browser origin(s). `NEXT_PUBLIC_API_URL` is compiled into the Next.js client at **build time**: set the Docker build argument for the browser-visible API URL, not just a runtime environment variable. The example Compose file is intended for local evaluation only.
-
-## Validate
-
-```bash
+~~~sh
 cd backend
-pip install -r requirements-dev.txt
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+uvicorn server:app --host 127.0.0.1 --port 8080
+~~~
+
+Le prototype à [l’accueil web](http://localhost:3000/) utilise `NEXT_PUBLIC_API_URL` (par défaut `http://localhost:8080`). Avec Docker, `docker compose up --build` construit les deux services. Pour activer son narrateur, la configuration optionnelle `OPENAI_API_KEY` appartient au serveur Python. La campagne locale fonctionne entièrement sans compte ni service payant.
+
+## Démo et validation
+
+Pour le chemin de démo, choisir les voix scénarisées et le carnet de lisière. Verser la pièce avec réserve, négocier le corridor alternatif et le soutenir. Les quatre bulletins et le coût pour les ateliers sont relisibles après fermeture. Les autres chemins, les origines et les prochaines missions figurent dans le [contrat de séance](docs/vision-v1.md).
+
+~~~sh
+cd backend
+python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 python -m compileall -q .
-```
+cd ../frontend
+npm ci
+node --experimental-strip-types --test tests/*.test.mjs
+npm run lint
+npm run build
+ANDROID_BUILD=1 NEXT_PUBLIC_ANDROID_BUILD=1 npm run build
+~~~
 
-The prototype includes rules-engine unit tests and FastAPI route smoke tests. Next.js lint/build, deployment tests and UI playtesting still need to be run in a fully provisioned environment.
+Les cas communs dans `fixtures/council-votes.json` exercent les seuils de vote V1 des deux moteurs. La nouvelle séquence d’enquête et de contre-lecture appartient à la campagne locale. L’ancienne partie Android migre dans un registre consultable qui préserve ses pièces, échanges et verdict éventuel. Une V1 en cours ouvre la nouvelle enquête avec son historique. Une sauvegarde illisible déclenche une récupération explicite. Les sources et observations restent déclaratives.
 
-See [design scope and next steps](docs/vision-v1.md).
-
-## Android APK (prototype)
-
-Pull requests now build a debug APK using `.github/workflows/android-apk.yml`. Download the `the-last-dialogue-android-debug` artifact from the linked GitHub Actions run, or follow its link in the PR discussion. **Android v0.2.0 / direct MUE:** the bundled rules engine and archives run entirely on-device. The optional **Agents LLM** mode connects directly to MUE's OpenAI-compatible **llama-server** via HTTPS **Tailscale Serve**, using the user's locally entered router API key and chosen model. No FastAPI process is required on Android. Sélène can propose research missions, Ada/Ivo comment on choices, and players can question each delegate. Without MUE, the scripted mode is fully playable. See [Android build](android/README.md) and [direct Tailscale + MUE setup](docs/mue-tailscale.md).
+La CI valide les règles, le transport simulé, les routes Python, le lint et le build web. Le workflow Android construit et inspecte l’APK debug. Pour l’export et le test sur appareil, consulter le [guide Android](android/README.md) et le [protocole MUE](docs/mue-tailscale.md).

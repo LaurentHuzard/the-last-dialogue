@@ -1,0 +1,9 @@
+[
+  {"archive":true,"motion":"compromise","vote":"compromise","support":4,"yes":["player","selene","ivo","ada"]},
+  {"archive":true,"motion":"compromise","vote":"construction","support":2,"yes":["player","ada"]},
+  {"archive":true,"motion":"construction","vote":"construction","support":3,"yes":["player","ivo","ada"]},
+  {"archive":true,"motion":"sanctuary","vote":"sanctuary","support":3,"yes":["player","selene","ada"]},
+  {"archive":true,"motion":"sanctuary","vote":"compromise","support":3,"yes":["player","selene","ada"]},
+  {"archive":false,"motion":null,"vote":"sanctuary","support":2,"yes":["player","selene"]},
+  {"archive":false,"motion":"compromise","vote":"compromise","support":3,"yes":["player","selene","ivo"]}
+]

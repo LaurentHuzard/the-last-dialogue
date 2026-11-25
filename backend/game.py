@@ -77,7 +77,12 @@ def _valid_source_url(value: str | None) -> str | None:
     if not value:
         return None
     value = value.strip()
-    p = urlsplit(value)
+    try:
+        p = urlsplit(value)
+        # Accessing .port validates numeric format and range.
+        _ = p.port
+    except ValueError as exc:
+        raise GameRuleError("URL de source invalide") from exc
     if p.scheme not in ("http", "https") or not p.hostname or p.username or p.password or len(value) > 2048:
         raise GameRuleError("URL de source invalide")
     return value
@@ -95,6 +100,8 @@ def submit_archive(session: Session, *, kind: EvidenceKind, title: str, descript
     source_url = _valid_source_url(source_url)
     if kind == "publication" and not source_url:
         raise GameRuleError("Une publication doit comporter un lien vers sa source")
+    if any((a.kind, a.title, a.description, a.source_url) == (kind, title, description, source_url) for a in session.archives):
+        raise GameRuleError("Cette archive figure déjà au dossier")
     archive = Archive(id=str(uuid4()), kind=kind, title=title, description=description, source_url=source_url,
                       created_at=datetime.now(timezone.utc).isoformat())
     session.archives.append(archive)
@@ -120,6 +127,8 @@ def negotiate(session: Session, proposal: str) -> None:
         raise GameRuleError("Proposition inconnue")
     if session.day >= 7:
         raise GameRuleError("Le délai de négociation est écoulé : passe au vote")
+    if proposal in session.agreements:
+        raise GameRuleError("Cette proposition a déjà été négociée")
     if proposal == "sanctuary":
         session.positions["selene"] = min(3, session.positions["selene"] + 1)
         session.positions["ivo"] = max(-3, session.positions["ivo"] - 1)

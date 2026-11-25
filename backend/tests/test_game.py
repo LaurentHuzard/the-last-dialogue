@@ -1,4 +1,5 @@
 """Run with: cd backend && python -m unittest discover -s tests"""
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -36,8 +37,9 @@ class RulesTests(unittest.TestCase):
 
     def test_rejects_malformed_url(self):
         state = create_session()
-        with self.assertRaises(GameRuleError):
-            submit_archive(state, kind="publication", title="Une étude", description="Une description suffisamment détaillée.", source_url="file:///etc/passwd")
+        for url in ("file:///etc/passwd", "http://[", "https://example.org:99999"):
+            with self.subTest(url=url), self.assertRaises(GameRuleError):
+                submit_archive(state, kind="publication", title="Une étude", description="Une description suffisamment détaillée.", source_url=url)
 
     def test_vote_is_final(self):
         state = create_session()
@@ -46,6 +48,29 @@ class RulesTests(unittest.TestCase):
             vote(state, "compromise")
         with self.assertRaises(GameRuleError):
             negotiate(state, "compromise")
+
+    def test_shared_vote_cases(self):
+        cases = json.loads((Path(__file__).resolve().parents[2] / "fixtures/council-votes.json").read_text())
+        for case in cases:
+            with self.subTest(case=case):
+                state = create_session()
+                if case["archive"]:
+                    submit_archive(state, kind="observation", title="Une pièce", description="Une archive reçue pour le scrutin.")
+                if case["motion"]:
+                    negotiate(state, case["motion"])
+                self.assertIn(f"({case['support']}/4 voix)", vote(state, case["vote"]))
+
+    def test_repeated_actions_do_not_change_positions(self):
+        state = create_session()
+        piece = dict(kind="observation", title="Une pièce", description="Une archive reçue pour le scrutin.")
+        submit_archive(state, **piece)
+        negotiate(state, "compromise")
+        before = state.public()
+        with self.assertRaises(GameRuleError):
+            submit_archive(state, **piece)
+        with self.assertRaises(GameRuleError):
+            negotiate(state, "compromise")
+        self.assertEqual(before, state.public())
 
     def test_cap_archives_and_influence(self):
         state = create_session()
