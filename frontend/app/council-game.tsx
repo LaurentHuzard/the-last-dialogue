@@ -7,6 +7,7 @@ import type { DelegateId } from '../lib/agent-game';
 import type { Mode, Proposal } from '../lib/offline-game';
 import { MUE_LIMITS, type LlamaConnection } from '../lib/tailscale-backend';
 import CouncilConnection from './council-connection';
+import { CouncilStorageError, confirmVoices, durableCouncil, storyStore } from '../lib/durable-council';
 import './council.css';
 
 const sourceTarget = process.env.NEXT_PUBLIC_ANDROID_BUILD === '1' ? '_self' : '_blank';
@@ -28,7 +29,7 @@ type Action = Parameters<typeof applyCouncil>[2];
 type Exchange = 'opening' | 'return';
 
 function ExchangeLines({session, scene}: {session: Council; scene: Exchange}) {
-  const lines = councilLines(session, scene, window.localStorage);
+  const lines = councilLines(session, scene, storyStore);
   return <ol className="council-lines">{lines.map((line, i) => {
     const other = lines[1-i].speaker;
     return <li key={line.speaker} className={'voice voice-' + line.speaker}>
@@ -132,10 +133,13 @@ function LegacyRegister({legacy}: {legacy: NonNullable<Council['legacy']>}) {
 export default function CouncilGame() {
   const [session, setSession] = useState<Council|null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [readAttempt, setReadAttempt] = useState(0);
+  const [storageFailed, setStorageFailed] = useState(false);
   const [damaged, setDamaged] = useState(false);
   const [newGame, setNewGame] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [transmitting, setTransmitting] = useState(false);
   const [connectionBusy, setConnectionBusy] = useState(false);
   const locked = busy || connectionBusy;
   const [mode, setMode] = useState<Mode>('scripted');
@@ -149,14 +153,16 @@ export default function CouncilGame() {
 
   useEffect(() => {
     let live = true;
-    queueMicrotask(() => {
+    durableCouncil(storyStore, loadCouncil, true).then(saved => {
+      if (live) { setSession(saved); setStorageFailed(false); setDamaged(false); setError(''); }
+    }).catch(e => {
       if (!live) return;
-      try { setSession(loadCouncil(window.localStorage)); }
-      catch (e) { setError(e instanceof Error ? e.message : 'Lecture impossible.'); setDamaged(true); }
-      setLoaded(true);
-    });
+      const failed = e instanceof CouncilStorageError || e instanceof DOMException;
+      setStorageFailed(failed); setDamaged(!failed);
+      setError(e instanceof Error ? e.message : 'Lecture impossible.');
+    }).finally(() => { if (live) setLoaded(true); });
     return () => { live = false; controller.current?.abort(); controller.current = null; };
-  }, []);
+  }, [readAttempt]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -171,46 +177,57 @@ export default function CouncilGame() {
     setBusy(true); setError('');
     try { await fn(current.signal); }
     catch (e) { if (controller.current === current) setError(e instanceof Error ? e.message : 'La transmission a échoué.'); }
-    finally { if (controller.current === current) { controller.current = null; setBusy(false); } }
+    finally { if (controller.current === current) { controller.current = null; setBusy(false); setTransmitting(false); } }
   }
   function enter() {
     void perform(async signal => {
-      const store = window.localStorage;
-      const next = damaged ? recoverCouncil(store, mode) : startCouncil(store, mode);
+      const store = storyStore;
+      const next = await durableCouncil(store, tx => {
+        const opened = damaged ? recoverCouncil(tx, mode) : startCouncil(tx, mode);
+        preserveDamagedVoices(tx);
+        return opened;
+      });
       setDamaged(false); setSession(next); setNewGame(false); setQuestion('');
-      preserveDamagedVoices(store);
+      setTransmitting(next.mode === 'llm' && connection !== null);
       await runCouncilDialogue(next, 'opening', store, connection, signal);
+      if (next.mode === 'llm') await confirmVoices(next, store);
     });
   }
   function act(action: Action) {
     if (!session) return;
     void perform(async signal => {
-      const next = applyCouncil(window.localStorage, session, action);
+      const next = await durableCouncil(storyStore, tx => applyCouncil(tx, session, action));
       setSession(next);
-      if (action.type === 'deposit') await runCouncilDialogue(next, 'return', window.localStorage, connection, signal);
+      if (action.type === 'deposit' && next.mode === 'llm') {
+        setTransmitting(connection !== null);
+        await runCouncilDialogue(next, 'return', storyStore, connection, signal);
+        await confirmVoices(next, storyStore);
+      }
     });
   }
   function ask(e: FormEvent) {
     e.preventDefault();
     if (!session || !connection) return;
     void perform(async signal => {
-      await askCouncilDelegate(session, delegate, question, window.localStorage, connection, signal);
+      setTransmitting(true);
+      await askCouncilDelegate(session, delegate, question, storyStore, connection, signal);
+      await confirmVoices(session, storyStore);
       if (!signal.aborted) setQuestion('');
     });
   }
 
-  const pendingNotice = busy && <div className="council-pending"><p role="status">Séance enregistrée sur cet appareil. Transmission en cours…</p>
-    <button type="button" className="secondary-action" onClick={() => controller.current?.abort()}>Annuler la transmission</button></div>;
-  const damagedVoices = loaded && !damaged && voiceRecordDamaged(window.localStorage);
+  const pendingNotice = busy && <div className="council-pending"><p role="status">{transmitting ? 'Transmission aux délégués en cours…' : 'Enregistrement sur cet appareil…'}</p>
+    {transmitting && <button type="button" className="secondary-action" onClick={() => controller.current?.abort()}>Annuler la transmission</button>}</div>;
+  const damagedVoices = loaded && !damaged && voiceRecordDamaged(storyStore);
   const needsConnection = loaded && (welcome || !damagedVoices) && (welcome ? mode : session?.mode) === 'llm' && (welcome || session?.phase !== 'finished');
-  const chat = loaded && session && !welcome ? readCouncilChat(session, window.localStorage) : [];
+  const chat = loaded && session && !welcome ? readCouncilChat(session, storyStore) : [];
   return <main className="council-shell">
     <header className="council-banner"><span>OctoMUE Game Studio</span><strong>The Last Dialogue</strong></header>
     {!loaded ? <p role="status">Ouverture du registre local…</p> : <>
       {damagedVoices && <p role="status" className="notice">{welcome
         ? 'Le carnet de voix est illisible. Ouvrir une nouvelle séance conservera une copie de secours de ce carnet.'
         : 'Le carnet de voix est illisible. La séance continue en voix scénarisées. Le procès-verbal reste accessible. À la prochaine séance, une copie de secours sera conservée.'}</p>}
-      {welcome ? <section className="council-welcome"><p className="council-kicker">Assemblée de 2235 · première séance</p>
+      {storageFailed ? <button type="button" className="secondary-action" onClick={() => setReadAttempt(n => n + 1)}>Réessayer d’ouvrir le registre</button> : welcome ? <section className="council-welcome"><p className="council-kicker">Assemblée de 2235 · première séance</p>
         <h1 ref={heading} tabIndex={-1}>Les Échos du Vivant</h1>
         <p className="council-lead">Au pied des vieux arbres, le câble attend. À l’autre bout, le dispensaire compte les heures de courant.</p>
         <p>En 2235, tu sièges avec Sélène, Ivo et Ada. Leur désaccord t’enverra enquêter en 2026. Rapporte une pièce, négocie le tracé et porte une voix au scrutin.</p>
@@ -254,7 +271,7 @@ export default function CouncilGame() {
         <p>{connection ? 'Voix MUE connectées au modèle ' + connection.model + '.' : 'MUE déconnecté. Les voix scénarisées prennent le relais. Pour connecter MUE, saisis à nouveau ta clé si le routeur en exige une.'}</p>
         <CouncilConnection onChange={setConnection} disabled={busy} onBusyChange={setConnectionBusy}/>
       </div>}
-      {welcome && <button type="button" className="primary-action" disabled={locked} onClick={enter}>{damaged ? 'Créer la copie de secours et ouvrir une séance' : 'Entrer dans l’Assemblée'}</button>}
+      {welcome && !storageFailed && <button type="button" className="primary-action" disabled={locked} onClick={enter}>{damaged ? 'Créer la copie de secours et ouvrir une séance' : 'Entrer dans l’Assemblée'}</button>}
       {!welcome && session && !damagedVoices && (chat.length > 0 || (connection && session.mode === 'llm' && session.phase !== 'finished')) &&
         <details className="council-fold"><summary>Questions libres aux délégués</summary>
           {chat.map((m,i) => <article key={i}><p><b>Toi à {names[m.speaker]}</b> · {m.question}</p>

@@ -36,7 +36,7 @@ Pour une démo courte, entrer en voix scénarisées, lire le carnet de lisière,
 La cible de 10 à 15 minutes exclut la recherche extérieure libre et l’attente du modèle. Une exécution automatisée vérifie le chemin. La durée de lecture, le plaisir et la compréhension demandent un playtest humain. Après fermeture, demander au joueur de nommer une concession, de dire pourquoi sa pièce comptait et d’identifier qui paie le prix de son vote.
 
 1. **Observer trois premières séances solo.** Relever les temps, les hésitations et les trois réponses de chaque joueur, puis corriger le premier point d’incompréhension récurrent.
-2. **Qualifier la liaison Android → MUE sur un téléphone.** Sur une route Serve privée adaptée, obtenir une réplique, couper la liaison puis retrouver le dossier et le résultat après fermeture.
+2. **Vérifier la mise à jour de l’application.** Installer deux versions signées avec la même clé sur un appareil de test et retrouver la pièce, les deux échanges et les quatre bulletins après mise à jour.
 3. **Éprouver l’interprétation documentaire.** Comparer deux pistes aux limites différentes avec des joueurs et vérifier qu’ils distinguent provenance déclarée, portée de la pièce et coût du choix.
 4. **Essayer une chronique Journalist locale.** Permettre de réviser un court récit issu du registre et démontrer qu’une édition laisse les événements et le verdict identiques.
 
@@ -44,6 +44,6 @@ Les duels, les échéances calendaires, le journalisme collaboratif en ligne, la
 
 ### Ce qui a été joué pour la PR de campagne
 
-Sur l’export statique, Chromium à 390 × 844 a donné 4/4 puis 2/4 avec la même pièce et le même détour négocié. À 360 × 740 avec mouvement réduit, le parcours entièrement au clavier a versé une archive personnelle, demandé la contre-lecture et retrouvé le rejet de la construction après réouverture. Aucun appel externe pendant ces parcours scénarisés. Dans un autre profil, une réponse MUE simulée arrivée après annulation a été écartée. Le test du prototype web a traversé le vrai FastAPI du dépôt à la négociation puis au vote. La mesure sur le fournisseur et la procédure sur téléphone figurent dans le [guide MUE](mue-tailscale.md).
+Sur l’export statique, Chromium à 390 × 844 a donné 4/4 puis 2/4 avec la même pièce et le même détour négocié. À 360 × 740 avec mouvement réduit, le parcours entièrement au clavier a versé une archive personnelle, demandé la contre-lecture et retrouvé le rejet de la construction après réouverture. Aucun appel externe pendant ces parcours scénarisés. Dans un autre profil, une réponse MUE simulée arrivée après annulation a été écartée. Le test du prototype web a traversé le vrai FastAPI du dépôt à la négociation puis au vote. La mesure sur le fournisseur, le parcours joué sur Galaxy et la procédure de reproduction figurent dans le [guide MUE](mue-tailscale.md).
 
 Les contrôles par révision et le téléchargement de l’APK debug sont accessibles depuis la [PR de campagne](https://github.com/LaurentHuzard/the-last-dialogue/pull/2).

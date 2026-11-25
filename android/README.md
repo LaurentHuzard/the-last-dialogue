@@ -51,8 +51,6 @@ Le fichier produit est `android/app/build/outputs/apk/debug/app-debug.apk`.
 ## Confidentialité et limites
 
 L'URL Tailscale est sauvée dans localStorage. La clé est stockée dans le
-state React de la session courante et n'est pas sérialisée. Les messages et
-archives sont enregistrés dans le stockage privé WebView, sans chiffrage
-supplémentaire. Ne pas exposer le routeur avec Tailscale Funnel ni partager
+state React de la session courante et n'est pas sérialisée. Le moteur importe le registre existant depuis le stockage local lors de la première ouverture. Les actions confirmées et le carnet de voix sont conservés dans IndexedDB, dans le stockage privé de la WebView. Le verdict s’affiche après confirmation de l’écriture. Le [test sur Galaxy](../docs/mue-tailscale.md#essai-matériel-du-25-novembre-2026) couvre un arrêt forcé à cet instant. Ne pas exposer le routeur avec Tailscale Funnel ni partager
 la clé MUE publiquement. Un appareil compromis peut compromettre une clé
 saisie dans l'application ; prévoir sa rotation si nécessaire.

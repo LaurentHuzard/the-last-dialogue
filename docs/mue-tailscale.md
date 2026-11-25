@@ -128,4 +128,21 @@ La clé reste en mémoire et doit être ressaisie après redémarrage. Les archi
 
 Le 25 novembre 2026, quatre appels de séance avec une pièce fictive ont atteint le modèle actif `gemma4_e4b` via un tunnel SSH temporaire. La requête à 180 tokens avec grammaire JSON forcée a donné quatre replis. Le modèle pouvait épuiser son budget avant le premier caractère visible. Avec validation JSON côté client et un plafond de 768 tokens incluant le raisonnement, trois répliques ont été acceptées (0,83 s, 0,71 s et 7,99 s). La quatrième, tronquée à 9,63 s, a déclenché la réplique de secours. Aucune reprise automatique. Les réponses visibles restent bornées à 500 caractères.
 
-La vérification des routes Serve existantes n’a trouvé aucun endpoint HTTPS renvoyant la liste du fournisseur. Aucun téléphone n’était visible par ADB. Le trajet depuis une WebView reste à qualifier avec le protocole ci-dessus.
+### Essai matériel du 25 novembre 2026
+
+Un Samsung Galaxy sous Android 17 (WebView 157) a joué la séance sur son propre moteur TypeScript. Le jeu déjà installé portait une autre signature. Une variante de test a donc utilisé un identifiant Android distinct, le code natif de la révision `6424317` et les 47 ressources embarquées de l’APK de CI, identiques octet pour octet. L’USB pilotait l’écran. Les requêtes du jeu sortaient du téléphone par HTTPS sur le tailnet.
+
+- La WebView a démarré avec son accès réseau coupé et a adopté le corridor alternatif par 4 voix sur 4.
+- Sur une route Serve privée temporaire vers llama.cpp, la WebView a découvert `gemma4_e4b`, affiché une génération de test et obtenu les deux interventions d’ouverture en 1,06 s et 0,91 s. La clé saisie était absente des valeurs du stockage local vérifiées après l’échange.
+- Après retrait de cette route pendant la partie, les deux tentatives de retour ont reçu un refus de connexion. Le jeu a utilisé ses deux répliques de scénario. Après fermeture et relance, la pièce était consultable et le jeu proposait la reconnexion. Les deux routes Serve préexistantes ont été revérifiées.
+
+Sur cette première révision, un second arrêt forcé aussitôt après l’affichage du verdict a laissé le registre au stade du dépôt. Le correctif attend la fin de la transaction IndexedDB en durabilité stricte avant d’afficher un verdict. Sur le même Galaxy, la partie interrompue au dépôt a repris, puis le test a forcé l’arrêt dès l’apparition du nouveau verdict. Au redémarrage, le carnet de lisière, les quatre bulletins et l’adoption à 4/4 étaient relisibles.
+
+Pour reproduire ce contrôle, fermer le processus de l’application de test dès que le verdict apparaît, relancer la même installation et relire la pièce, les quatre bulletins et l’épilogue.
+
+Les commandes ADB utilisées pour simuler une fermeture brutale portent uniquement sur le paquet de test. Dans cette installation à part, le nom de l’activité Java reste celui du jeu.
+
+~~~sh
+adb -d shell am force-stop tv.octomue.thelastdialogue.smoke6424317
+adb -d shell am start -W -n tv.octomue.thelastdialogue.smoke6424317/tv.octomue.thelastdialogue.MainActivity
+~~~
