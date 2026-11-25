@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { applyCouncil, startCouncil, loadCouncil, QUESTION, COMMITMENT } from '../lib/council.ts';
-import { councilLines, readCouncilChat, runCouncilDialogue, askCouncilDelegate } from '../lib/council-dialogue.ts';
+import { councilLines, readCouncilChat, preserveDamagedVoices, voiceRecordDamaged, runCouncilDialogue, askCouncilDelegate } from '../lib/council-dialogue.ts';
 import { llamaChat, MUE_LIMITS } from '../lib/tailscale-backend.ts';
 
 const connection = { origin: 'https://test.example.ts.net', apiKey: 'test-secret-12345', model: 'fixture' };
@@ -148,4 +148,23 @@ test('requesting a second reading is remembered as pending; Ada contests the imm
   assert.ok(memory.events.some(e => e.id === 'review'));
   const next = applyCouncil(store, after, {type:'motion',proposal:'construction'});
   assert.equal(applyCouncil(store,next,{type:'vote',proposal:'construction'}).result.support,2);
+});
+
+test('an unreadable voice book keeps the offline vote available and can be backed up for the next council', async () => {
+  const { session, store, records } = setup();
+  const raw = '{illisible';
+  store.setItem('tld-council-prose-v1', raw);
+  assert.equal(voiceRecordDamaged(store), true);
+  const never = () => { throw Error('aucun appel attendu'); };
+  await runCouncilDialogue(session, 'opening', store, connection, undefined, never);
+  const after = applyCouncil(store, session, deposit);
+  await runCouncilDialogue(after, 'return', store, connection, undefined, never);
+  assert.equal(councilLines(after, 'return', store)[0].status, 'invalid');
+  assert.equal(applyCouncil(store, applyCouncil(store, after, motion), vote).result.support, 4);
+  assert.equal(store.getItem('tld-council-prose-v1'), raw);
+  const next = startCouncil(store, 'llm');
+  preserveDamagedVoices(store);
+  assert.ok([...records].some(([k,v]) => k.startsWith('tld-voices-recovery-') && v === raw));
+  await runCouncilDialogue(next, 'opening', store, connection, undefined, async () => line('La nouvelle assemblée peut commencer.'));
+  assert.equal(councilLines(next, 'opening', store)[0].status, 'generated');
 });

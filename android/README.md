@@ -14,7 +14,7 @@ l'artifact `the-last-dialogue-android-debug`. Après extraction du ZIP,
 installe `app-debug.apk`. Les clés de signature debug peuvent changer
 entre les builds : si Android refuse une mise à jour pour problème de
 signature, il faudra désinstaller l'ancien build, ce qui efface les
-parties sauvegardées localement.
+parties sauvegardées localement. La migration V1 nécessite que les données WebView soient toujours présentes. Garde l’ancienne installation si tu veux conserver une partie et que les signatures diffèrent.
 
 ## Jeu avec ou sans MUE
 

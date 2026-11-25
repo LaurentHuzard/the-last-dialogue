@@ -52,8 +52,7 @@ Le second affichage doit indiquer un proxy du genre :
        -> http://127.0.0.1:8003
 
 **S'il existe déjà un serveur sur 443**, ne remplace pas sa configuration.
-Tu peux utiliser un autre port HTTPS Serve, si disponible dans ta
-configuration Tailscale :
+Lors de la reconnaissance, 443 et 8443 servaient déjà d’autres applications. L’exemple suivant concerne uniquement un port 8443 confirmé libre sur ton installation. Toute modification des routes relève de l’opérateur.
 
 ~~~bash
 tailscale serve --bg --https=8443 8003

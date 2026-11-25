@@ -41,3 +41,9 @@ La cible de 10 à 15 minutes exclut la recherche extérieure libre et l’attent
 4. **Essayer une chronique Journalist locale.** Permettre de réviser un court récit issu du registre et démontrer qu’une édition laisse les événements et le verdict identiques.
 
 Les duels, les échéances calendaires, le journalisme collaboratif en ligne, la vérification scientifique automatique, les agents permanents, les chapitres suivants, les comptes et l’hébergement public restent ouverts pour la suite.
+
+### Ce qui a été joué pour la PR de campagne
+
+Sur l’export statique, Chromium à 390 × 844 a donné 4/4 puis 2/4 avec la même pièce et le même détour négocié. À 360 × 740 avec mouvement réduit, le parcours entièrement au clavier a versé une archive personnelle, demandé la contre-lecture et retrouvé le rejet de la construction après réouverture. Aucun appel externe pendant ces parcours scénarisés. Dans un autre profil, une réponse MUE simulée arrivée après annulation a été écartée. Le test du prototype web a traversé le vrai FastAPI du dépôt à la négociation puis au vote. La mesure sur le fournisseur et la procédure sur téléphone figurent dans le [guide MUE](mue-tailscale.md).
+
+Les contrôles par révision et le téléchargement de l’APK debug sont accessibles depuis la [PR de campagne](https://github.com/LaurentHuzard/the-last-dialogue/pull/2).

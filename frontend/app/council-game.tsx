@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { applyCouncil, COMMITMENT, loadCouncil, QUESTION, recoverCouncil, SCENARIO_PIECES, startCouncil, type Council, type PieceInput } from '../lib/council';
-import { askCouncilDelegate, COUNCIL_PROFILES, councilLines, readCouncilChat, runCouncilDialogue } from '../lib/council-dialogue';
+import { askCouncilDelegate, COUNCIL_PROFILES, preserveDamagedVoices, voiceRecordDamaged, councilLines, readCouncilChat, runCouncilDialogue } from '../lib/council-dialogue';
 import type { DelegateId } from '../lib/agent-game';
 import type { Mode, Proposal } from '../lib/offline-game';
 import { MUE_LIMITS, type LlamaConnection } from '../lib/tailscale-backend';
@@ -178,6 +178,7 @@ export default function CouncilGame() {
       const store = window.localStorage;
       const next = damaged ? recoverCouncil(store, mode) : startCouncil(store, mode);
       setDamaged(false); setSession(next); setNewGame(false); setQuestion('');
+      preserveDamagedVoices(store);
       await runCouncilDialogue(next, 'opening', store, connection, signal);
     });
   }
@@ -200,11 +201,15 @@ export default function CouncilGame() {
 
   const pendingNotice = busy && <div className="council-pending"><p role="status">Séance enregistrée sur cet appareil. Transmission en cours…</p>
     <button type="button" className="secondary-action" onClick={() => controller.current?.abort()}>Annuler la transmission</button></div>;
-  const needsConnection = loaded && (welcome ? mode : session?.mode) === 'llm' && (welcome || session?.phase !== 'finished');
+  const damagedVoices = loaded && !damaged && voiceRecordDamaged(window.localStorage);
+  const needsConnection = loaded && (welcome || !damagedVoices) && (welcome ? mode : session?.mode) === 'llm' && (welcome || session?.phase !== 'finished');
   const chat = loaded && session && !welcome ? readCouncilChat(session, window.localStorage) : [];
   return <main className="council-shell">
     <header className="council-banner"><span>OctoMUE Game Studio</span><strong>The Last Dialogue</strong></header>
     {!loaded ? <p role="status">Ouverture du registre local…</p> : <>
+      {damagedVoices && <p role="status" className="notice">{welcome
+        ? 'Le carnet de voix est illisible. Ouvrir une nouvelle séance conservera une copie de secours de ce carnet.'
+        : 'Le carnet de voix est illisible. La séance continue en voix scénarisées. Le procès-verbal reste accessible. À la prochaine séance, une copie de secours sera conservée.'}</p>}
       {welcome ? <section className="council-welcome"><p className="council-kicker">Assemblée de 2235 · première séance</p>
         <h1 ref={heading} tabIndex={-1}>Les Échos du Vivant</h1>
         <p className="council-lead">Au pied des vieux arbres, le câble attend. À l’autre bout, le dispensaire compte les heures de courant.</p>
@@ -250,7 +255,7 @@ export default function CouncilGame() {
         <CouncilConnection onChange={setConnection} disabled={busy} onBusyChange={setConnectionBusy}/>
       </div>}
       {welcome && <button type="button" className="primary-action" disabled={locked} onClick={enter}>{damaged ? 'Créer la copie de secours et ouvrir une séance' : 'Entrer dans l’Assemblée'}</button>}
-      {!welcome && session && (chat.length > 0 || (connection && session.mode === 'llm' && session.phase !== 'finished')) &&
+      {!welcome && session && !damagedVoices && (chat.length > 0 || (connection && session.mode === 'llm' && session.phase !== 'finished')) &&
         <details className="council-fold"><summary>Questions libres aux délégués</summary>
           {chat.map((m,i) => <article key={i}><p><b>Toi à {names[m.speaker]}</b> · {m.question}</p>
             <p><b>{names[m.speaker]}</b> · {m.text || 'La question reste au registre sans réponse générée.'}</p><small>{statusText[m.status]} · {m.calls} appel(s) · {m.status === 'interrupted' ? 'durée inconnue' : (m.durationMs/1000).toFixed(1) + ' s'}</small></article>)}

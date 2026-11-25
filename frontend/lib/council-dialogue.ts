@@ -28,15 +28,31 @@ function read(id: string, store: SessionStorage): Narration {
   const raw = store.getItem(KEY);
   if (raw === null) return empty(id);
   if (raw.length > 24000) throw new Error('Carnet de voix trop volumineux.');
-  const record = JSON.parse(raw) as Narration;
+  let record: Narration;
+  try { record = JSON.parse(raw) as Narration; }
+  catch { throw new Error('Carnet de voix illisible.'); }
   if (record?.version !== 1 || typeof record.id !== 'string') throw new Error('Carnet de voix illisible.');
-  if (record.id !== id) return empty(id);
   if (![record.opening, record.return].every(s => s === undefined || (Array.isArray(s) && s.length === MUE_LIMITS.turnsPerScene && s.every(delivery)))
       || !Array.isArray(record.chat) || record.chat.length > MUE_LIMITS.questionsPerCouncil
       || !record.chat.every(c => delivery(c) && DELEGATE_IDS.includes(c.speaker) && typeof c.question === 'string' && c.question.length <= 500)) {
     throw new Error('Carnet de voix illisible.');
   }
-  return record;
+  return record.id === id ? record : empty(id);
+}
+
+export function voiceRecordDamaged(store: SessionStorage): boolean {
+  try { read('', store); return false; }
+  catch { return true; }
+}
+
+/** Called only on an explicit new-council action. Keep the damaged bytes before replacement. */
+export function preserveDamagedVoices(store: SessionStorage): void {
+  if (!voiceRecordDamaged(store)) return;
+  const raw = store.getItem(KEY);
+  if (raw !== null) {
+    store.setItem('tld-voices-recovery-' + crypto.randomUUID(), raw);
+    store.removeItem(KEY);
+  }
 }
 
 function write(record: Narration, store: SessionStorage) {
@@ -122,6 +138,7 @@ export async function runCouncilDialogue(
 ): Promise<void> {
   if (session.mode !== 'llm' || !current(session, store)) return;
   if (!((scene === 'opening' && session.phase === 'investigation') || (scene === 'return' && session.phase === 'motion'))) return;
+  if (voiceRecordDamaged(store)) return;
   const record = read(session.id, store);
   if (record[scene]) return;
   const lines = scripted(session, scene);
