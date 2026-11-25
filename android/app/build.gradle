@@ -16,8 +16,8 @@ android {
         applicationId 'tv.octomue.thelastdialogue'
         minSdk 24
         targetSdk 34
-        versionCode 7
-        versionName '0.2.2-echos'
+        versionCode 8
+        versionName '0.2.3-echos'
     }
 
     compileOptions {
