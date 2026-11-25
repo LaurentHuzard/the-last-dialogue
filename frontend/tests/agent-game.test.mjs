@@ -113,3 +113,15 @@ test('invalid questions never call the model', async () => {
     throw new Error('Should not reach network');
   }), /3 et 500/);
 });
+
+test('a late V1 generation cannot rewind a finished session', async () => {
+  const store = storage();
+  let finish;
+  const opening = androidGameRequest('/api/sessions', {mode: 'llm'}, store, CONNECTION,
+    () => new Promise(resolve => { finish = resolve; }));
+  const started = resumeOfflineSession(store);
+  const done = await androidGameRequest('/api/sessions/' + started.id + '/vote', {proposal:'sanctuary'}, store);
+  finish({ok: true, json: async () => ({choices:[{message:{content:goodMission}}]})});
+  await assert.rejects(opening, /périmée/);
+  assert.deepEqual(resumeOfflineSession(store), done);
+});

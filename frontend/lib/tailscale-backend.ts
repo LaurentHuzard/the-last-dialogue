@@ -8,6 +8,15 @@ export type LlamaConnection = {
   apiKey: string;
   model: string;
 };
+export const MUE_LIMITS = Object.freeze({
+  turnsPerScene: 2, scenesPerCouncil: 2, questionsPerCouncil: 3,
+  maxTokens: 768, callMs: 18000, sceneMs: 30000, maxLine: 500,
+});
+export type Failure = 'busy' | 'timeout' | 'cancelled' | 'invalid' | 'unavailable';
+export class MueError extends Error {
+  readonly kind: Failure;
+  constructor(kind: Failure, message: string) { super(message); this.kind = kind; }
+}
 export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 export type LlamaFetch = typeof fetch;
 
@@ -68,6 +77,7 @@ export async function listLlamaModels(
       mode: 'cors',
       cache: 'no-store',
       headers: getHeaders(apiKey, false),
+      redirect: 'error',
       signal: AbortSignal.timeout(15000),
     });
     await checkedResponse(response);
@@ -76,9 +86,10 @@ export async function listLlamaModels(
     if (!Array.isArray(data)) {
       throw new Error('La réponse /v1/models ne contient pas de liste de modèles.');
     }
+    if (data.length > 2048) throw new Error('La réponse dépasse la limite de modèles.');
     const models = [...new Set(data
       .map(item => (item && typeof item === 'object' ? (item as { id?: unknown }).id : undefined))
-      .filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 128))];
+      .filter((id): id is string => typeof id === 'string' && /^[\w./:-]{1,128}$/.test(id)))];
     if (models.length === 0) throw new Error('MUE ne propose aucun modèle dans /v1/models.');
     return models;
   } catch (error) {
@@ -94,40 +105,85 @@ export function preferredModel(models: string[], previous = ''): string {
     || models[0] || '';
 }
 
+// A transport that ignores abort keeps its slot until the physical call settles.
+let generating = false;
+
+async function readCompletion(response: Response): Promise<unknown> {
+  if (!response.body) return response.json();
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let length = 0;
+  let json = '';
+  try {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      length += chunk.value.byteLength;
+      if (length > 65536) {
+        void reader.cancel().catch(() => {});
+        throw new MueError('invalid', 'Réponse trop volumineuse.');
+      }
+      json += decoder.decode(chunk.value, { stream: true });
+    }
+    return JSON.parse(json + decoder.decode());
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 export async function llamaChat(
-  connection: LlamaConnection,
-  messages: ChatMessage[],
-  fetcher: LlamaFetch = fetch,
+  connection: LlamaConnection, messages: ChatMessage[], fetcher: LlamaFetch = fetch,
+  options: { signal?: AbortSignal; timeoutMs?: number; onDispatch?: () => void } = {},
 ): Promise<string> {
   const origin = normalizeTailscaleLlamaOrigin(connection.origin);
-  if (!connection.model || !/^[\w./:-]{1,128}$/.test(connection.model)) {
-    throw new Error('Choisis un modèle proposé par MUE.');
+  if (!/^[\w./:-]{1,128}$/.test(connection.model)) {
+    throw new MueError('invalid', 'Choisis un modèle proposé par MUE.');
   }
+  const cancelled = () => new MueError('cancelled', 'Génération annulée.');
+  if (options.signal?.aborted) throw cancelled();
+  if (generating) throw new MueError('busy', 'Une génération est déjà en cours.');
+  const timeoutMs = Math.min(MUE_LIMITS.callMs, options.timeoutMs ?? MUE_LIMITS.callMs);
+  const controller = new AbortController();
+  const abort = () => controller.abort(cancelled());
+  const timer = setTimeout(() => controller.abort(new MueError('timeout', 'Délai de génération dépassé.')), timeoutMs);
+  options.signal?.addEventListener('abort', abort, { once: true });
+  generating = true;
+  const call = async () => {
+    try {
+      options.onDispatch?.();
+      const response = await fetcher(origin + '/v1/chat/completions', {
+        method: 'POST', mode: 'cors', cache: 'no-store', redirect: 'error',
+        headers: getHeaders(connection.apiKey, true),
+        body: JSON.stringify({ model: connection.model, messages, stream: false,
+          temperature: 0.6, max_tokens: MUE_LIMITS.maxTokens,
+        }),
+        signal: controller.signal,
+      });
+      await checkedResponse(response);
+      let body: unknown;
+      try { body = await readCompletion(response); }
+      catch { throw new MueError('invalid', 'Réponse MUE illisible.'); }
+      const content = (body as {choices?: {message?: {content?: unknown}}[]})?.choices?.[0]?.message?.content;
+      const raw = Array.isArray(content) && content.length <= 16 && content.every(p => typeof p?.text === 'string')
+        ? content.map(p => p.text).join('\n') : content;
+      if (typeof raw !== 'string' || !raw.trim()) throw new MueError('invalid', 'Le modèle n’a pas produit de texte visible.');
+      if (raw.length > 3000 || (connection.apiKey && raw.includes(connection.apiKey))) {
+        throw new MueError('invalid', 'Réponse MUE hors format.');
+      }
+      return raw.trim();
+    } finally { generating = false; }
+  };
   try {
-    const response = await fetcher(origin + '/v1/chat/completions', {
-      method: 'POST',
-      mode: 'cors',
-      headers: getHeaders(connection.apiKey, true),
-      body: JSON.stringify({
-        model: connection.model,
-        messages,
-        stream: false,
-        temperature: 0.6,
-        max_tokens: 420,
-      }),
-      signal: AbortSignal.timeout(150000),
-    });
-    await checkedResponse(response);
-    const body: unknown = await response.json();
-    const choice = (body as { choices?: { message?: { content?: unknown } }[] })?.choices?.[0];
-    const raw = choice?.message?.content;
-    const text = typeof raw === 'string' ? raw : Array.isArray(raw)
-      ? raw.map(item => typeof item === 'object' && item !== null && 'text' in item
-          ? String((item as { text: unknown }).text) : '').join('\n') : '';
-    if (!text.trim()) throw new Error('Le modèle n’a pas produit de texte visible. Essaie un alias non-thinking sur MUE.');
-    return text.trim().slice(0, 3000);
-  } catch (error) {
-    if (error instanceof Error && (/^(Le modèle n|Choisis un modèle)/.test(error.message))) throw error;
-    throw networkError(error);
+    return await Promise.race([call(), new Promise<never>((_, reject) => {
+      if (controller.signal.aborted) reject(controller.signal.reason);
+      else controller.signal.addEventListener('abort', () => reject(controller.signal.reason), { once: true });
+    })]);
+  } catch (err) {
+    if (controller.signal.aborted) throw controller.signal.reason;
+    if (err instanceof MueError) throw err;
+    throw new MueError('unavailable', networkError(err).message);
+  } finally {
+    clearTimeout(timer);
+    options.signal?.removeEventListener('abort', abort);
   }
 }

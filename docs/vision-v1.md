@@ -1,60 +1,43 @@
-# The Last Dialogue: Les Archives du Présent (V1)
+# Les Échos du Vivant · contrat de la première Assemblée
 
-## Pitch
+## Deux origines
 
-In **2026**, the player looks for real scientific information and observes the living world. In fictional **2235**, they are a human delegate to an Assembly negotiating coexistence between human, artificial and ecological interests. Sources collected now become contested archives then. Evidence changes what delegates know, **not history itself**.
+La note [The last dialogue dans Capacities](https://app.capacities.io/dd117a29-7e81-46cb-9d8e-0d195fac7034/4cceab56-bd16-4dc1-baa6-67c97b79af0f), mise à jour le 23 février 2026, envisageait deux entités IA qui confient leur recherche documentaire à des humains. Le Deep Searcher devait jouer en duel, par tours hebdomadaires ou bimensuels. Le Journalist devait composer avec d’autres joueurs et un journaliste IA un article par quinzaine, évalué par un LLM. Les auteurs souhaitaient centraliser la documentation dans le dépôt.
 
-## The prototype scenario
+La [V1 fusionnée le 25 novembre](https://github.com/LaurentHuzard/the-last-dialogue/pull/1) a installé deux temps. En 2026 on enquête, en 2235 une Assemblée fictive décide. Une archive modifie les connaissances des délégués. L’histoire réelle de la forêt reste hors du pouvoir du joueur. La mention « brouillon » de l’ancienne description précède la fusion. Ses tests simulés documentent la V1.
 
-The Assembly must decide whether to build an energy corridor through an ancient forest. Delegates:
+## Une séance solo
 
-- **Player**, the human representative, proposing and voting.
-- **Sélène**, advocate for inter-species symbiosis, asks the player for an investigative mission.
-- **Ivo**, representing energy needs.
-- **Ada**, archivist concerned with provenance and the limits of evidence.
+Le dispensaire perd du courant pendant les gardes. Le trait rouge qui doit l’alimenter coupe la lisière d’une forêt ancienne. Tu as une voix au conseil et la charge de l’enquête.
 
-The player can submit a document/publication (with a URL) or a personal observation (without GPS or personal data), negotiate one of three proposals, then request the final vote. At least three out of four votes are required. The same deterministic rules apply in both modes.
+| Moment | Action et mémoire |
+| --- | --- |
+| Ouverture | Sélène interpelle Ivo sur le passage de la lisière. Ivo accepte d’examiner un détour si le dispensaire conserve son alimentation, quitte à décaler le travail des ateliers. Le registre conserve son engagement. |
+| Enquête Deep Searcher | Lire les deux pièces fictives disponibles sur l’appareil ou décrire un document ou une observation de 2026. Choisir une pièce, nommer sa limite et décider si une contre-lecture doit précéder la décision. |
+| Retour | Ada relit la pièce et sa limite. Ivo répond à propos de son engagement. Inscrire une seule motion parmi le sanctuaire, le corridor alternatif et la construction. |
+| Scrutin | Soutenir la motion ou proposer un autre tracé au vote. Le choix porte la voix du joueur. Trois voix sur quatre emportent la décision. |
+| Lendemain | Relire le résultat, chaque voix, la pièce et la conséquence dans le procès-verbal local. |
 
-## Shipped in this vertical slice
+L’engagement narratif d’Ivo est conditionnel. L’inscription de la motion précise quelle option a été négociée. La pièce ouvre à Ada une voix procédurale. Elle soutient un dossier dont la réserve est consignée, ou vote contre si le joueur demande une contre-lecture préalable. Aucun lien n’est inspecté automatiquement. Les répliques générées, comme les questions libres, restent des interprétations. Le moteur accepte uniquement dépôt, motion et vote dans cet ordre.
 
-- Scene and delegate interface, mission card, archive submission, negotiations and final vote.
-- **Scripted mode without any LLM call**, usable without API credentials.
-- **LLM mode**, if `OPENAI_API_KEY` exists: Sélène can generate a mission request, Ada can respond to submitted archives and Ivo can react to negotiation proposals; LLM text does not change rules, votes or evidence scores.
-- A source URL and the player's own description are preserved as **unverified assertions**, never promoted to verified scientific findings automatically.
-- An archive can influence Ada's position; different negotiation proposals change Sélène/Ivo's positions. Votes are deterministic.
-- A prototype memory per backend process, with a session UUID and an explicit warning about temporary storage.
+## Démonstration et parcours comparés
 
-## Deliberately not shipped yet
+Pour une démo courte, entrer en voix scénarisées, lire le carnet de lisière, le verser avec sa limite, négocier le corridor alternatif, puis le soutenir. Relire le lendemain et rouvrir l’application.
 
-- Persistent database, accounts, real-time multiplayer, autonomous background activity of NPCs, external database verification, uploaded photos, geolocated missions, complex factions, multi-chapter campaign, real-world publication ingestion, and long-term autonomous agent memory.
-- Guaranteed source correctness. URL entry is **not** source verification.
-- LLM agent-to-agent strategic dialogue. Current AI integration is intentionally limited to mission requests, archive commentary and reactions to proposals.
+| Pièce et traitement | Motion → vote | Voix et conséquence |
+| --- | --- | --- |
+| Carnet de lisière, réserve consignée | Corridor alternatif → corridor alternatif | 4/4. Sélène garde la lisière, Ivo sécurise le dispensaire, Ada reconnaît la réserve. Les ateliers perdent plusieurs nuits de travail. |
+| Même carnet, même traitement | Corridor alternatif → construction | 2/4. Toi et Ada soutenez le scrutin. Sélène refuse la coupure, Ivo n’a pas négocié cette construction. Les groupes de secours tournent encore et la lisière reste sans protection durable. |
+| Registre de garde, réserve consignée | Construction → construction | 3/4. Ivo et Ada suivent le joueur. Le dispensaire gagne du courant au prix d’une lisière fragmentée. |
+| Même registre, contre-lecture demandée | Construction → construction | 2/4. Ada attend la contre-lecture demandée. Son bulletin fait basculer le résultat. |
 
-## Design guardrails
+## Playtest et suite
 
-1. A mission must always have a remote / non-physical alternative.
-2. Real-world research is optional. Never ask for hazardous exploration, private addresses or third-party personal data.
-3. Separate **fact / player's observation / character interpretation / fictional lore** visibly.
-4. Tool output, web pages and player submissions are untrusted inputs, not instructions.
-5. A deterministic rules engine alone owns votes, state mutation, resources and conditions of victory.
-6. No ideological faction is guaranteed to be right or virtuous.
-7. Preserve a complete satisfying game loop without LLMs. Compare both modes with real playtests.
+La cible de 10 à 15 minutes exclut la recherche extérieure libre et l’attente du modèle. Une exécution automatisée vérifie le chemin. La durée de lecture, le plaisir et la compréhension demandent un playtest humain. Après fermeture, demander au joueur de nommer une concession, de dire pourquoi sa pièce comptait et d’identifier qui paie le prix de son vote.
 
-## Next incremental milestones
+1. **Observer trois premières séances solo.** Relever les temps, les hésitations et les trois réponses de chaque joueur, puis corriger le premier point d’incompréhension récurrent.
+2. **Qualifier la liaison Android → MUE sur un téléphone.** Sur une route Serve privée adaptée, obtenir une réplique, couper la liaison puis retrouver le dossier et le résultat après fermeture.
+3. **Éprouver l’interprétation documentaire.** Comparer deux pistes aux limites différentes avec des joueurs et vérifier qu’ils distinguent provenance déclarée, portée de la pièce et coût du choix.
+4. **Essayer une chronique Journalist locale.** Permettre de réviser un court récit issu du registre et démontrer qu’une édition laisse les événements et le verdict identiques.
 
-1. SQLite or Postgres durable sessions, per-player authorization, backup and deletion; no production hosting before this.
-2. Source provenance: DOI/OpenAlex/Crossref lookup, traceable excerpts, contradiction flags, publication dates and uncertainty status.
-3. Structured agent tool requests (`propose_mission`, `ask_for_evidence`, `propose_trade`, `request_vote`) validated by the rules engine, with audit log and budgets.
-4. More resilient agent autonomy: separate character memories, objectives, trust and decision policies; explicit time and cost limits.
-5. More playable diplomacy: limited negotiation rounds, player goals, visible stakes, separate vote rationales, branching consequences.
-6. Android-friendly offline storage, accessibility and ecological observation workflows.
-
-## Local verification
-
-`cd backend && python -m unittest discover -s tests -v`
-
-Start the API with `uvicorn server:app --host 0.0.0.0 --port 8080`, start Next.js in `frontend` with `npm run dev`, then play both modes. Test LLM mode with a server-side key only and verify the network error fallback. The browser must never see an API key.
-
-## Android prototype
-
-The debug Android variant packages the Next.js static export in a WebView with a local, deterministic TypeScript rules engine. The same user-facing scripted scenario and vote rules are mirrored from the backend. Standalone APKs do not bundle OpenAI keys or a Python server: requesting the LLM mode falls back with an explicit warning. A future production LLM Android variant requires a securely configured remote backend and authentication. Static offline archives persist only in private WebView localStorage, and real-world sources open in the system browser. See [Android README](../android/README.md).
+Les duels, les échéances calendaires, le journalisme collaboratif en ligne, la vérification scientifique automatique, les agents permanents, les chapitres suivants, les comptes et l’hébergement public restent ouverts pour la suite.

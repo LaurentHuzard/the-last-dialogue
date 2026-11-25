@@ -1,4 +1,4 @@
-# Android v0.2.1 : jeu hors ligne + agents sur MUE
+# Android · Les Échos du Vivant
 
 L'application est une WebView Android emballant le frontend Next.js exporté
 en fichiers statiques. Les règles et les archives résident localement dans
@@ -8,10 +8,10 @@ pour la version Android**.
 
 ## Télécharger une build
 
-Sur la [PR #1](https://github.com/LaurentHuzard/the-last-dialogue/pull/1),
+Dans la PR de la campagne ou dans [Android debug APK](https://github.com/LaurentHuzard/the-last-dialogue/actions/workflows/android-apk.yml),
 ouvre le dernier workflow **Android debug APK** réussi et télécharge
-l'artifact \`the-last-dialogue-android-debug\`. Après extraction du ZIP,
-installe \`app-debug.apk\`. Les clés de signature debug peuvent changer
+l'artifact `the-last-dialogue-android-debug`. Après extraction du ZIP,
+installe `app-debug.apk`. Les clés de signature debug peuvent changer
 entre les builds : si Android refuse une mise à jour pour problème de
 signature, il faudra désinstaller l'ancien build, ce qui efface les
 parties sauvegardées localement.
@@ -19,11 +19,8 @@ parties sauvegardées localement.
 ## Jeu avec ou sans MUE
 
 - **Sans LLM** : entièrement local, sans connexion, sans requête réseau
-  générée par le jeu. Missions prédéfinies et règles déterministes.
-- **Agents LLM** : URL Tailscale HTTPS + clé API llama.cpp en mémoire +
-  alias de modèle choisi dans la liste \`/v1/models\`. L'interface propose aussi un test de génération `/v1/chat/completions` avant de lancer la partie. Sélène propose
-  une mission, Ada réagit à une archive, Ivo réagit à une négociation,
-  et le joueur peut envoyer une question libre à l'un des trois.
+  générée par le jeu. Deux échanges scénarisés, une enquête, une motion et un scrutin avec épilogue relisible.
+- **Agents LLM** : choisir une URL HTTPS Tailscale Serve et un modèle de `/v1/models`. Une réplique de test permet de vérifier la génération. Les scènes utilisent le même dossier et le même scrutin. À la reprise, saisir de nouveau la clé pour les futurs échanges ou poursuivre en voix scénarisées. Les deux délibérations déjà enregistrées restent consultables.
 - Les personnages n'ont pas accès aux outils de MUE, n'effectuent
   pas de recherches web et ne contrôlent pas les votes du jeu.
 - Les sources externes sont ouvertes dans le navigateur système.
@@ -49,7 +46,7 @@ cd ..
 python3 android/scripts/verify_apk_assets.py android/app/build/outputs/apk/debug/app-debug.apk
 ~~~
 
-Le fichier produit est \`android/app/build/outputs/apk/debug/app-debug.apk\`.
+Le fichier produit est `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Confidentialité et limites
 

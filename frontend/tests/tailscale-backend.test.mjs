@@ -70,3 +70,16 @@ test('empty content never masquerades as a generated agent message', async () =>
     { role: 'system', content: 'Bonjour' },
   ], async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: '' } }] }) })), /pas produit de texte/);
 });
+
+test('bounded completion parser refuses malformed JSON, oversized bodies and credential echoes', async () => {
+  const connection = {origin:BASE, model:'fixture', apiKey:'demo-key-not-for-prose'};
+  for (const response of [
+    new Response('{'),
+    new Response(' '.repeat(65537)),
+    Response.json({choices:[{message:{content:[{text:{invented:'shape'}}]}}]}),
+    Response.json({choices:[{message:{content:'Secret: ' + connection.apiKey}}]}),
+  ]) {
+    await assert.rejects(llamaChat(connection, [], async () => response),
+      e => e.kind === 'invalid' && !e.message.includes(connection.apiKey));
+  }
+});
